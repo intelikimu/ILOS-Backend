@@ -7,7 +7,9 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "init-db": "node init-db.js",
-    "setup": "npm install && npm run init-db"
+    "setup": "npm install && npm run init-db",
+    "build": "echo 'No build needed for Vercel serverless functions'",
+    "vercel-build": "echo 'Vercel build complete'"
   },
   "keywords": [],
   "author": "",

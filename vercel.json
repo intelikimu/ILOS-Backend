@@ -1,0 +1,85 @@
+{
+  "version": 2,
+  "name": "ilos-backend",
+  "builds": [
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/health",
+      "dest": "/api/health.js"
+    },
+    {
+      "src": "/getNTB_ETB",
+      "dest": "/api/getNTB_ETB.js"
+    },
+    {
+      "src": "/cif/(.*)",
+      "dest": "/api/cif.js"
+    },
+    {
+      "src": "/api/autoloan/(.*)",
+      "dest": "/api/autoloan.js"
+    },
+    {
+      "src": "/api/cashplus/(.*)",
+      "dest": "/api/cashplus.js"
+    },
+    {
+      "src": "/api/creditcard/(.*)",
+      "dest": "/api/creditcard.js"
+    },
+    {
+      "src": "/api/applications/(.*)",
+      "dest": "/api/applications.js"
+    },
+    {
+      "src": "/api/personal-details/(.*)",
+      "dest": "/api/personal-details.js"
+    },
+    {
+      "src": "/api/current-address/(.*)",
+      "dest": "/api/current-address.js"
+    },
+    {
+      "src": "/api/permanent-address/(.*)",
+      "dest": "/api/permanent-address.js"
+    },
+    {
+      "src": "/api/employment-details/(.*)",
+      "dest": "/api/employment-details.js"
+    },
+    {
+      "src": "/api/reference-contacts/(.*)",
+      "dest": "/api/reference-contacts.js"
+    },
+    {
+      "src": "/api/vehicle-details/(.*)",
+      "dest": "/api/vehicle-details.js"
+    },
+    {
+      "src": "/api/insurance-details/(.*)",
+      "dest": "/api/insurance-details.js"
+    },
+    {
+      "src": "/api/contact-details/(.*)",
+      "dest": "/api/contact-details.js"
+    },
+    {
+      "src": "/api/verification/(.*)",
+      "dest": "/api/verification.js"
+    }
+  ],
+  "env": {
+    "DATABASE_URL": "@database_url",
+    "NODE_ENV": "production"
+  },
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 30
+    }
+  }
+} 

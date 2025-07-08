@@ -1,0 +1,17 @@
+# Environment Variables Template for Vercel Deployment
+# Copy these to your Vercel Dashboard Environment Variables
+
+# Database Configuration
+DATABASE_URL=your_neon_postgresql_connection_string_here
+
+# Node Environment
+NODE_ENV=production
+
+# Optional: Add other environment variables your app needs
+# JWT_SECRET=your_jwt_secret_here
+# API_KEY=your_api_key_here
+
+# Instructions:
+# 1. Go to Vercel Dashboard → Your Project → Settings → Environment Variables
+# 2. Add each variable above with your actual values
+# 3. Make sure to set the Environment to "Production", "Preview", and "Development" as needed 
