@@ -365,4 +365,77 @@ EXPOSE 5000
 CMD ["npm", "start"]
 ```
 
+## Vercel Serverless Deployment
+
+This backend has been optimized for Vercel serverless deployment with all Express routes converted to serverless functions.
+
+### Local Development
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Create `.env` file with:
+```
+DB_HOST=your_database_host
+DB_USER=your_database_user
+DB_PASSWORD=your_database_password
+DB_NAME=your_database_name
+DB_PORT=3306
+```
+
+3. Run the development server:
+```bash
+npm run dev
+```
+
+### Vercel Deployment
+
+1. Push code to GitHub
+2. Import project in Vercel
+3. Set environment variables from `.vercel-env-template`
+
+See `DEPLOYMENT-GUIDE.md` for detailed instructions.
+
+## API Endpoints
+
+### Core Endpoints
+- `GET /health` - Health check
+- `POST /getNTB_ETB` - Customer status lookup
+- `GET /cif/:consumerId` - CIF details
+
+### Application Endpoints
+- `POST /api/applications` - Create application
+- `GET /api/applications` - Get applications
+- `GET /api/applications/:id` - Get application by ID
+- `PUT /api/applications/:id` - Update application
+- `DELETE /api/applications/:id` - Delete application
+
+### Data Endpoints
+- `/api/personal-details` - Personal details management
+- `/api/current-address` - Current address management
+- `/api/permanent-address` - Permanent address management
+- `/api/employment-details` - Employment details management
+- `/api/reference-contacts` - Reference contacts management
+- `/api/vehicle-details` - Vehicle details management
+- `/api/insurance-details` - Insurance details management
+- `/api/contact-details` - Contact details management
+- `/api/verification` - Verification management
+
+### Product Endpoints
+- `/api/autoloan` - Auto loan applications
+- `/api/cashplus` - Cash plus applications
+- `/api/creditcard` - Credit card applications
+
+## Architecture
+
+- Express routes converted to serverless functions
+- CORS handling for all endpoints
+- Database connection pooling
+- Error handling middleware
+- Customer data formatting
+
+For full deployment instructions of both frontend and backend, see `COMPLETE-DEPLOYMENT-GUIDE.md` in the root directory.
+
 This backend provides a robust foundation for the ILOS system with proper data validation, comprehensive API endpoints, and support for multiple product types while handling both ETB and NTB customer flows efficiently. 
