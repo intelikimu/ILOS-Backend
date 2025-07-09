@@ -2,74 +2,14 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/*.js",
+      "src": "api/index.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/health",
-      "dest": "/api/health"
-    },
-    {
-      "src": "/getNTB_ETB",
-      "dest": "/api/getNTB_ETB"
-    },
-    {
-      "src": "/cif/(.*)",
-      "dest": "/api/cif"
-    },
-    {
-      "src": "/api/autoloan/(.*)",
-      "dest": "/api/autoloan"
-    },
-    {
-      "src": "/api/cashplus/(.*)",
-      "dest": "/api/cashplus"
-    },
-    {
-      "src": "/api/creditcard/(.*)",
-      "dest": "/api/creditcard"
-    },
-    {
-      "src": "/api/applications/(.*)",
-      "dest": "/api/applications"
-    },
-    {
-      "src": "/api/personal-details/(.*)",
-      "dest": "/api/personal-details"
-    },
-    {
-      "src": "/api/current-address/(.*)",
-      "dest": "/api/current-address"
-    },
-    {
-      "src": "/api/permanent-address/(.*)",
-      "dest": "/api/permanent-address"
-    },
-    {
-      "src": "/api/employment-details/(.*)",
-      "dest": "/api/employment-details"
-    },
-    {
-      "src": "/api/reference-contacts/(.*)",
-      "dest": "/api/reference-contacts"
-    },
-    {
-      "src": "/api/vehicle-details/(.*)",
-      "dest": "/api/vehicle-details"
-    },
-    {
-      "src": "/api/insurance-details/(.*)",
-      "dest": "/api/insurance-details"
-    },
-    {
-      "src": "/api/contact-details/(.*)",
-      "dest": "/api/contact-details"
-    },
-    {
-      "src": "/api/verification/(.*)",
-      "dest": "/api/verification"
+      "src": "/(.*)",
+      "dest": "/api/index.js"
     }
   ],
   "env": {
