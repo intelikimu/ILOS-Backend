@@ -2,19 +2,15 @@
   "name": "ilos-backend",
   "version": "1.0.0",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js",
-    "init-db": "node init-db.js",
-    "setup": "npm install && npm run init-db",
-    "build": "echo 'No build needed for Vercel serverless functions'",
-    "vercel-build": "echo 'Vercel build complete'"
+    "dev": "vercel dev"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
+  
   "dependencies": {
     "axios": "^1.10.0",
     "cors": "^2.8.5",
