@@ -4,7 +4,7 @@ const db = require('./db');
 const bodyParser = require('body-parser');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
@@ -22,10 +22,25 @@ const referenceContactsRouter = require('./routes/referenceContacts');
 const insuranceDetailsRouter = require('./routes/insuranceDetails');
 const contactDetailsRouter = require('./routes/contactDetails');
 const verificationRouter = require('./routes/verification');
+const cifRouter = require('./routes/cif');
+
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', message: 'ILOS Backend Server is running', timestamp: new Date().toISOString() });
+});
+
+// Direct customer status endpoint for testing
+app.get('/customer-status/:cnic', async (req, res) => {
+  try {
+    const { cnic } = req.params;
+    const customerService = require('./customerService');
+    const customerStatus = await customerService.getCustomerStatus(cnic);
+    res.json(customerStatus);
+  } catch (error) {
+    console.error('Error fetching customer status:', error);
+    res.status(500).json({ error: 'Failed to fetch customer status' });
+  }
 });
 
 // Customer lookup endpoint
@@ -39,20 +54,15 @@ app.get('/api/getNTB_ETB/:cnic', async (req, res) => {
 
     const query = `
       SELECT 
-        CIF, Title, FirstName, LastName, FatherName, MotherName,
-        DateOfBirth, Gender, MaritalStatus, Religion, Nationality,
-        ResidentialStatus, Education, Profession, Income,
-        MobileNumber, EmailAddress, ResidentialAddress, OfficeAddress,
-        AccountNumber, AccountTitle, BankName, BranchName,
-        NextOfKinName, NextOfKinRelation, NextOfKinContact,
-        ReferenceContact1, ReferenceContact2
-      FROM customer_data 
-      WHERE CNIC = ?
+        customer_id, cnic, status, fullname, domicile_country, domicile_state,
+        city, district, business, industry, created_at
+      FROM cif_customers
+      WHERE cnic = $1
     `;
 
-    const [rows] = await db.execute(query, [cnic]);
+    const result = await db.query(query, [cnic]);
     
-    if (rows.length === 0) {
+    if (result.rows.length === 0) {
       return res.json({
         isETB: false,
         customer: null,
@@ -60,38 +70,23 @@ app.get('/api/getNTB_ETB/:cnic', async (req, res) => {
       });
     }
 
-    const customer = rows[0];
+    const customer = result.rows[0];
     
-    // Format customer data for frontend
+    // Format customer data for frontend - using actual table columns
     const formattedCustomer = {
-      cif: customer.CIF,
-      title: customer.Title,
-      firstName: customer.FirstName,
-      lastName: customer.LastName,
-      fatherName: customer.FatherName,
-      motherName: customer.MotherName,
-      dateOfBirth: customer.DateOfBirth,
-      gender: customer.Gender,
-      maritalStatus: customer.MaritalStatus,
-      religion: customer.Religion,
-      nationality: customer.Nationality,
-      residentialStatus: customer.ResidentialStatus,
-      education: customer.Education,
-      profession: customer.Profession,
-      income: customer.Income,
-      mobileNumber: customer.MobileNumber,
-      emailAddress: customer.EmailAddress,
-      residentialAddress: customer.ResidentialAddress,
-      officeAddress: customer.OfficeAddress,
-      accountNumber: customer.AccountNumber,
-      accountTitle: customer.AccountTitle,
-      bankName: customer.BankName,
-      branchName: customer.BranchName,
-      nextOfKinName: customer.NextOfKinName,
-      nextOfKinRelation: customer.NextOfKinRelation,
-      nextOfKinContact: customer.NextOfKinContact,
-      referenceContact1: customer.ReferenceContact1,
-      referenceContact2: customer.ReferenceContact2
+      customerId: customer.customer_id,
+      cnic: customer.cnic,
+      status: customer.status,
+      fullname: customer.fullname,
+      firstName: customer.fullname ? customer.fullname.split(' ')[0] : '',
+      lastName: customer.fullname ? customer.fullname.split(' ').slice(-1)[0] : '',
+      domicileCountry: customer.domicile_country,
+      domicileState: customer.domicile_state,
+      city: customer.city,
+      district: customer.district,
+      business: customer.business,
+      industry: customer.industry,
+      createdAt: customer.created_at
     };
 
     res.json({
@@ -117,6 +112,8 @@ app.use('/api/reference-contacts', referenceContactsRouter);
 app.use('/api/insurance-details', insuranceDetailsRouter);
 app.use('/api/contact-details', contactDetailsRouter);
 app.use('/api/verification', verificationRouter);
+app.use('/api/cif', cifRouter);
+app.use('/cif', cifRouter);
 
 // Start server
 app.listen(PORT, () => {
