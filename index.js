@@ -162,6 +162,10 @@ app.get('/cif/:consumerId', async (req, res) => {
   }
 });
 
+
+
+
+
 // Product-specific routes
 app.use('/api/autoloan', autoLoanRoutes);
 app.use('/api/cashplus', cashPlusRoutes);
