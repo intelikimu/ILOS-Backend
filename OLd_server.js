@@ -23,10 +23,8 @@ const insuranceDetailsRouter = require('./routes/insuranceDetails');
 const contactDetailsRouter = require('./routes/contactDetails');
 const verificationRouter = require('./routes/verification');
 const cifRouter = require('./routes/cif');
-const cashplusRouter = require('./routes/cashplus');
-const autoloanRouter = require('./routes/autoloan');
-const ameendriveRouter = require('./routes/ameendrive');
-const smeasaanRouter = require('./routes/smeasaan');
+const casplusRouter =  require('./routes/cashplus');
+
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -117,11 +115,7 @@ app.use('/api/contact-details', contactDetailsRouter);
 app.use('/api/verification', verificationRouter);
 app.use('/api/cif', cifRouter);
 app.use('/cif', cifRouter);
-app.use('/api/cashplus', cashplusRouter);
-app.use('/api/autoloan', autoloanRouter);
-app.use('/api/ameendrive', ameendriveRouter);
-app.use('/api/smeasaan', smeasaanRouter);
-
+app.use('/api/cashplus', casplusRouter);
 
 // Start server
 app.listen(PORT, () => {
