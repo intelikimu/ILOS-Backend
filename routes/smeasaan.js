@@ -171,4 +171,56 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+
+
+// GET all SME Asaan applications for a given customer_id (with all child tables)
+router.get('/by-customer/:customer_id', async (req, res) => {
+  try {
+    const { customer_id } = req.params;
+    if (!customer_id) {
+      return res.status(400).json({ error: "customer_id is required" });
+    }
+    // Get all main applications for this customer
+    const apps = await db.query(
+      'SELECT * FROM smeasaan_applications WHERE customer_id = $1 ORDER BY created_at DESC',
+      [customer_id]
+    );
+    const out = [];
+    for (const app of apps.rows) {
+      const id = app.id;
+      const [
+        references,
+        existing_loans,
+        business_descriptions,
+        market_info,
+        financial_indicators,
+        financial_indicators_medium
+      ] = await Promise.all([
+        db.query('SELECT * FROM smeasaan_references WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM smeasaan_existing_loans WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM smeasaan_business_descriptions WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM smeasaan_market_info WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM smeasaan_financial_indicators WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM smeasaan_financial_indicators_medium WHERE application_id = $1', [id])
+      ]);
+      out.push({
+        ...app,
+        references: references.rows,
+        existing_loans: existing_loans.rows,
+        business_descriptions: business_descriptions.rows,
+        market_info: market_info.rows,
+        financial_indicators: financial_indicators.rows,
+        financial_indicators_medium: financial_indicators_medium.rows
+      });
+    }
+    res.json(out);
+  } catch (err) {
+    console.error('Error fetching SME Asaan applications by customer_id:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+
+
 module.exports = router;

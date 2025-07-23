@@ -4,10 +4,103 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db1');
 
+// Helper function to sanitize numeric fields
+function sanitizeNumericFields(obj, numericKeys = []) {
+  const clonedObj = { ...obj };
+  numericKeys.forEach(key => {
+    if (clonedObj[key] === '' || clonedObj[key] === undefined || clonedObj[key] === 'undefined') {
+      clonedObj[key] = null;
+    } else if (clonedObj[key] && !isNaN(clonedObj[key])) {
+      clonedObj[key] = parseFloat(clonedObj[key]);
+    }
+  });
+  return clonedObj;
+}
+
+// Helper function to ensure boolean fields are valid
+function sanitizeBooleanFields(obj, booleanKeys = []) {
+  const clonedObj = { ...obj };
+  booleanKeys.forEach(key => {
+    if (clonedObj[key] === '' || clonedObj[key] === undefined || clonedObj[key] === 'undefined') {
+      clonedObj[key] = null;
+    } else if (typeof clonedObj[key] === 'string') {
+      const value = clonedObj[key].toLowerCase();
+      if (value === 'yes' || value === 'true' || value === '1') {
+        clonedObj[key] = true;
+      } else if (value === 'no' || value === 'false' || value === '0') {
+        clonedObj[key] = false;
+      } else {
+        clonedObj[key] = null;
+      }
+    }
+  });
+  return clonedObj;
+}
+
+// Define the keys for each type of field
+const numericKeys = [
+  "current_rate_kibor", "current_rate_spread", "price_value", "takaful_rate",
+  "musharakah_share_percent", "musharakah_share_amount", "auto_financing_percent", 
+  "auto_financing_amount", "monthly_rental", "curr_monthly_rent", "percent_shareholding",
+  "regular_monthly", "gross_income", "net_take_home", "other_monthly_income", "monthly_income",
+  "avg_monthly_savings"
+];
+
+const smallintKeys = [
+  "year_of_manufacture", "loan_period", "dependents_children", "other_dependents", 
+  "curr_rented_years", "perm_car_year", "years_in_business", "prev_experience_years"
+];
+
+const booleanKeys = [
+  "co_applicant_case", "tracker_company_arranged", "agreement_understanding", 
+  "spouse_employed", "nontax_applied_financing", "nontax_no_ntn"
+];
+
+const dateFields = [
+  "date_of_birth" // Remove signature_date
+];
+
+// BYTEA fields for handling signatures and stamps
+const byteaFields = [
+  "applicant_signature", "co_applicant_signature", "applicant_signature_cnic", 
+  "co_applicant_signature_cnic", "nontax_applicant_signature", "dealer_stamp", "branch_stamp"
+];
+
 // POST: Create new Ameen Drive application with children
 router.post('/', async (req, res) => {
   const client = await db.connect();
   try {
+    // Sanitize the data before inserting
+    req.body = sanitizeNumericFields(req.body, numericKeys);
+    req.body = sanitizeBooleanFields(req.body, booleanKeys);
+    
+    // Handle smallint fields specifically
+    for (const key of smallintKeys) {
+      if (req.body[key] === "" || req.body[key] === undefined) {
+        req.body[key] = null;
+      } else if (req.body[key] !== null) {
+        const parsed = parseInt(req.body[key]);
+        req.body[key] = !isNaN(parsed) ? parsed : null;
+      }
+    }
+    
+    // Handle date fields
+    for (const key of dateFields) {
+      if (req.body[key] === "" || req.body[key] === undefined) {
+        req.body[key] = null;
+      }
+    }
+
+    // Handle BYTEA fields - typically these would be base64 strings or file paths
+    // For now, just ensure they're not empty strings
+    for (const key of byteaFields) {
+      if (req.body[key] === "") {
+        req.body[key] = null;
+      }
+    }
+
+    console.log('Sanitized request body:', req.body);
+
     await client.query('BEGIN');
     // Insert main application
     const fields = [
@@ -23,17 +116,28 @@ router.post('/', async (req, res) => {
       "business_address", "business_street", "business_tehsil_district_area", "business_city", "business_country", "business_postal_code", "business_telephone_no", "business_fax_no", "business_nearest_landmark",
       "prev_employer_name", "prev_designation", "prev_experience_years", "prev_employer_tel", "prof_company_name", "prof_address", "prof_profession",
       "regular_monthly", "gross_income", "net_take_home", "other_monthly_income", "source_of_other_income", "monthly_income", "avg_monthly_savings", "spouse_employed", "spouse_income_source",
+      "applicant_signature", "co_applicant_signature", "applicant_signature_cnic", "co_applicant_signature_cnic", // BYTEA fields
       "channel_code", "pb_so_employee_no", "program_code", "referral_id", "branch_code", "sm_employee_no", "application_source", "branch_name_code", "dealership_name",
-      "nontax_full_name", "nontax_resident_of", "nontax_applied_financing", "nontax_no_ntn"
-      // You can add signature/BYTEA fields as well, handling file uploads if required
+      "nontax_full_name", "nontax_resident_of", "nontax_applied_financing", "nontax_no_ntn", "nontax_applicant_signature", // BYTEA field
+      "dealer_stamp", "branch_stamp" // BYTEA fields, removed signature_date
     ];
-    const values = fields.map(f => req.body[f]);
+    
+    // Create an array of values that matches the fields array
+    const values = [];
+    for (const field of fields) {
+      values.push(req.body[field]);
+    }
+    
     const placeholders = fields.map((_, idx) => `$${idx + 1}`).join(', ');
     const insertQuery = `
       INSERT INTO ameendrive_applications (${fields.join(', ')})
       VALUES (${placeholders})
       RETURNING *;
     `;
+    
+    console.log('Executing SQL:', insertQuery);
+    console.log('With values:', values);
+    
     const result = await client.query(insertQuery, values);
     const application = result.rows[0];
     const applicationId = application.id;
@@ -77,8 +181,8 @@ router.post('/', async (req, res) => {
     res.status(201).json({ success: true, application, application_id: applicationId });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('Error creating AmeenDrive application:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error creating AmeenDrive application and children:', err);
+    res.status(500).json({ error: `Error creating AmeenDrive application: ${err.message}` });
   } finally {
     client.release();
   }

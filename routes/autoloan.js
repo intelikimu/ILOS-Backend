@@ -569,5 +569,63 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+
+
+// GET all autoloan applications for a given customer_id (WITH all children)
+router.get('/by-customer/:customer_id', async (req, res) => {
+  try {
+    const { customer_id } = req.params;
+    if (!customer_id) {
+      return res.status(400).json({ error: "customer_id is required" });
+    }
+    // Get all main applications for this customer
+    const apps = await db.query(
+      'SELECT * FROM autoloan_applications WHERE customer_id = $1 ORDER BY created_at DESC',
+      [customer_id]
+    );
+    const out = [];
+    for (const app of apps.rows) {
+      const id = app.id;
+      const [
+        otherBankAccounts,
+        creditCardsClean,
+        creditCardsSecured,
+        personalLoansClean,
+        personalLoansSecured,
+        otherFacilities,
+        appliedLimits,
+        references
+      ] = await Promise.all([
+        db.query('SELECT * FROM autoloan_other_bank_accounts WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM autoloan_credit_cards_clean WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM autoloan_credit_cards_secured WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM autoloan_personal_loans_clean WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM autoloan_personal_loans_secured WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM autoloan_other_facilities WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM autoloan_applied_limits WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM autoloan_references WHERE application_id = $1', [id])
+      ]);
+      out.push({
+        ...app,
+        other_bank_accounts: otherBankAccounts.rows,
+        credit_cards_clean: creditCardsClean.rows,
+        credit_cards_secured: creditCardsSecured.rows,
+        personal_loans_clean: personalLoansClean.rows,
+        personal_loans_secured: personalLoansSecured.rows,
+        other_facilities: otherFacilities.rows,
+        applied_limits: appliedLimits.rows,
+        references: references.rows
+      });
+    }
+    res.json(out);
+  } catch (err) {
+    console.error('Error fetching autoloan applications by customer_id:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+
+
 module.exports = router;
 

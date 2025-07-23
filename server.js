@@ -8,8 +8,10 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
-app.use(express.json());
+// Increase payload size limit for file uploads
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '50mb' }));
 
 // Import routes
 const applicationsRouter = require('./routes/applications');
@@ -27,6 +29,9 @@ const cashplusRouter = require('./routes/cashplus');
 const autoloanRouter = require('./routes/autoloan');
 const ameendriveRouter = require('./routes/ameendrive');
 const smeasaanRouter = require('./routes/smeasaan');
+const classic_creditcardRouter = require('./routes/classic_creditcard');
+const platinum_creditcardRouter = require('./routes/platinum_creditcard');
+const commercialVehicleRouter = require('./routes/commercialVehicle');
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -121,6 +126,9 @@ app.use('/api/cashplus', cashplusRouter);
 app.use('/api/autoloan', autoloanRouter);
 app.use('/api/ameendrive', ameendriveRouter);
 app.use('/api/smeasaan', smeasaanRouter);
+app.use('/api/commercialVehicle', commercialVehicleRouter);
+app.use('/api/classic_creditcard', classic_creditcardRouter);
+app.use('/api/platinum_creditcard', platinum_creditcardRouter);
 
 
 // Start server
