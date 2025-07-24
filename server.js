@@ -13,6 +13,16 @@ app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.json({ limit: '50mb' }));
 
+// Add a simple health check endpoint after the app declaration but before the routes
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // Import routes
 const applicationsRouter = require('./routes/applications');
 const personalDetailsRouter = require('./routes/personalDetails');
@@ -126,6 +136,7 @@ app.use('/api/cashplus', cashplusRouter);
 app.use('/api/autoloan', autoloanRouter);
 app.use('/api/ameendrive', ameendriveRouter);
 app.use('/api/smeasaan', smeasaanRouter);
+app.use('/api/smeasaan', smeasaanRouter); // Add direct route without /api prefix
 app.use('/api/commercialVehicle', commercialVehicleRouter);
 app.use('/api/classic_creditcard', classic_creditcardRouter);
 app.use('/api/platinum_creditcard', platinum_creditcardRouter);
