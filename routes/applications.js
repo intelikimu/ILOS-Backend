@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../db');
+const db = require('../db1');
 const { z } = require('zod');
 
 // Define Zod validation schema
@@ -24,6 +24,255 @@ const applicationSchema = z.object({
   pmdc_expiry_date: z.string(),
 });
 
+// Test endpoint to check table structure
+router.get('/test/tables', async (req, res) => {
+  try {
+    const tables = [
+      'cashplus_applications',
+      'autoloan_applications', 
+      'smeasaan_applications',
+      'commercial_vehicle_applications',
+      'ameendrive_applications',
+      'platinum_card_applications',
+      'creditcard_applications'
+    ];
+
+    const results = {};
+    
+    for (const table of tables) {
+      try {
+        const result = await db.query(`SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1`, [table]);
+        results[table] = result.rows;
+      } catch (err) {
+        results[table] = { error: err.message };
+      }
+    }
+
+    res.json(results);
+  } catch (err) {
+    console.error('Error checking table structure:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// GET recent applications for Personal Banker dashboard
+router.get('/recent/pb', async (req, res) => {
+  try {
+    // Get recent applications from all application types
+    const queries = [
+      // CashPlus applications
+      db.query(`
+        SELECT 
+          id,
+          'CashPlus' as application_type,
+          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          'CashPlus Loan' as loan_type,
+          COALESCE(amount_requested, 0) as amount,
+          CASE 
+            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            ELSE 'draft'
+          END as status,
+          'medium' as priority,
+          created_at as submitted_date,
+          created_at as last_update,
+          85 as completion_percentage,
+          'Karachi Main' as branch
+        FROM cashplus_applications 
+        ORDER BY created_at DESC 
+        LIMIT 4
+      `),
+      
+      // Auto Loan applications
+      db.query(`
+        SELECT 
+          id,
+          'AutoLoan' as application_type,
+          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          'Auto Loan' as loan_type,
+          COALESCE(desired_loan_amount, 0) as amount,
+          CASE 
+            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            ELSE 'draft'
+          END as status,
+          'medium' as priority,
+          created_at as submitted_date,
+          created_at as last_update,
+          90 as completion_percentage,
+          'Lahore Main' as branch
+        FROM autoloan_applications 
+        ORDER BY created_at DESC 
+        LIMIT 4
+      `),
+      
+      // SME ASAAN applications - check if table exists and has correct columns
+      db.query(`
+        SELECT 
+          id,
+          'SMEASAAN' as application_type,
+          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          'Business Loan' as loan_type,
+          COALESCE(desired_loan_amount, 0) as amount,
+          CASE 
+            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            ELSE 'draft'
+          END as status,
+          'high' as priority,
+          created_at as submitted_date,
+          created_at as last_update,
+          95 as completion_percentage,
+          'Islamabad' as branch
+        FROM smeasaan_applications 
+        ORDER BY created_at DESC 
+        LIMIT 4
+      `).catch(() => null), // Ignore if table doesn't exist
+      
+      // Commercial Vehicle applications - check if table exists and has correct columns
+      db.query(`
+        SELECT 
+          id,
+          'CommercialVehicle' as application_type,
+          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          'Commercial Vehicle Loan' as loan_type,
+          COALESCE(desired_loan_amount, 0) as amount,
+          CASE 
+            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            ELSE 'draft'
+          END as status,
+          'high' as priority,
+          created_at as submitted_date,
+          created_at as last_update,
+          88 as completion_percentage,
+          'Karachi Main' as branch
+        FROM commercial_vehicle_applications 
+        ORDER BY created_at DESC 
+        LIMIT 4
+      `).catch(() => null), // Ignore if table doesn't exist
+      
+      // AmeenDrive applications - check if table exists and has correct columns
+      db.query(`
+        SELECT 
+          id,
+          'AmeenDrive' as application_type,
+          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          'AmeenDrive Loan' as loan_type,
+          COALESCE(facility_amount, 0) as amount,
+          CASE 
+            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            ELSE 'draft'
+          END as status,
+          'medium' as priority,
+          created_at as submitted_date,
+          created_at as last_update,
+          92 as completion_percentage,
+          'Lahore Main' as branch
+        FROM ameendrive_applications 
+        ORDER BY created_at DESC 
+        LIMIT 4
+      `).catch(() => null), // Ignore if table doesn't exist
+      
+      // Platinum Credit Card applications
+      db.query(`
+        SELECT 
+          id,
+          'PlatinumCreditCard' as application_type,
+          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          'Platinum Credit Card' as loan_type,
+          COALESCE(credit_limit, 0) as amount,
+          CASE 
+            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            ELSE 'draft'
+          END as status,
+          'low' as priority,
+          created_at as submitted_date,
+          created_at as last_update,
+          78 as completion_percentage,
+          'Karachi Main' as branch
+        FROM platinum_card_applications 
+        ORDER BY created_at DESC 
+        LIMIT 4
+      `).catch(() => null), // Ignore if table doesn't exist
+      
+      // Classic Credit Card applications
+      db.query(`
+        SELECT 
+          id,
+          'ClassicCreditCard' as application_type,
+          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          'Classic Credit Card' as loan_type,
+          COALESCE(credit_limit, 0) as amount,
+          CASE 
+            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            ELSE 'draft'
+          END as status,
+          'low' as priority,
+          created_at as submitted_date,
+          created_at as last_update,
+          82 as completion_percentage,
+          'Islamabad' as branch
+        FROM creditcard_applications 
+        ORDER BY created_at DESC 
+        LIMIT 4
+      `).catch(() => null) // Ignore if table doesn't exist
+    ];
+
+    const results = await Promise.allSettled(queries);
+    
+    // Combine all results and sort by submitted_date
+    let allApplications = [];
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value && result.value.rows && result.value.rows.length > 0) {
+        allApplications = allApplications.concat(result.value.rows);
+      }
+    });
+
+    // Sort by submitted_date (most recent first) and take only the last 4
+    allApplications.sort((a, b) => {
+      const dateA = new Date(a.submitted_date || a.created_at || 0);
+      const dateB = new Date(b.submitted_date || b.created_at || 0);
+      return dateB - dateA;
+    });
+
+    // Take only the last 4 applications
+    const recentApplications = allApplications.slice(0, 4);
+
+    // Format the response to match the frontend expectations
+    const formattedApplications = recentApplications.map((app, index) => ({
+      id: `UBL-2024-${String(index + 1).padStart(6, '0')}`,
+      applicantName: app.applicant_name || 'Unknown Applicant',
+      loanType: app.loan_type || 'Personal Loan',
+      amount: app.amount ? `PKR ${Number(app.amount).toLocaleString()}` : 'PKR 0',
+      status: app.status || 'draft',
+      priority: app.priority || 'medium',
+      submittedDate: app.submitted_date || app.created_at || new Date().toISOString(),
+      lastUpdate: app.last_update || app.created_at || new Date().toISOString(),
+      completionPercentage: app.completion_percentage || 0,
+      branch: app.branch || 'Main Branch',
+      // Mock data for fields not in database
+      creditScore: Math.floor(Math.random() * 200) + 600,
+      monthlyIncome: `PKR ${Math.floor(Math.random() * 200000) + 50000}`,
+      age: Math.floor(Math.random() * 30) + 25,
+      riskLevel: ['low', 'medium', 'high'][Math.floor(Math.random() * 3)],
+      estimatedProcessingTime: `${Math.floor(Math.random() * 5) + 2}-${Math.floor(Math.random() * 3) + 5} days`,
+      documents: [
+        { name: "CNIC Copy", status: "submitted", required: true },
+        { name: "Salary Slip", status: "submitted", required: true },
+        { name: "Bank Statement", status: "submitted", required: true },
+        { name: "Employment Letter", status: "submitted", required: false },
+      ],
+      timeline: [
+        { date: new Date(app.submitted_date || app.created_at).toISOString().split('T')[0], event: "Application Created", status: "completed" },
+        { date: new Date(app.submitted_date || app.created_at).toISOString().split('T')[0], event: "Documents Uploaded", status: "completed" },
+        { date: new Date(app.submitted_date || app.created_at).toISOString().split('T')[0], event: "Initial Review", status: "completed" },
+        { date: "TBD", event: "SPU Verification", status: "pending" },
+      ],
+    }));
+
+    res.json(formattedApplications);
+  } catch (err) {
+    console.error('Error fetching recent applications:', err.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // GET all applications
 router.get('/', async (req, res) => {
