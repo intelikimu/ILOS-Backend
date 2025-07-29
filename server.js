@@ -103,6 +103,8 @@ app.use('/api/reference-contacts', require('./routes/referenceContacts'));
 app.use('/api/insurance-details', require('./routes/insuranceDetails'));
 app.use('/api/contact-details', require('./routes/contactDetails'));
 app.use('/api/verification', require('./routes/verification'));
+app.use('/api/spu-officer', require('./routes/spuOfficer'));
+app.use('/api/spu', require('./routes/spu'));
 app.use('/api/cif', require('./routes/cif'));
 app.use('/cif', require('./routes/cif'));
 app.use('/api/cashplus', require('./routes/cashplus'));
