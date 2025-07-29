@@ -189,6 +189,8 @@ router.post('/', async (req, res) => {
 });
 
 // GET: Fetch application and children by ID
+
+// GET: Fetch application and children by ID
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -197,16 +199,19 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Application not found' });
     }
     const application = mainResult.rows[0];
-    const [bankAccounts, bankFacilities, references] = await Promise.all([
+    const [bankAccounts, bankFacilities, references, Am_documents] = await Promise.all([
       db.query('SELECT * FROM ameendrive_bank_accounts WHERE application_id = $1', [id]),
       db.query('SELECT * FROM ameendrive_bank_facilities WHERE application_id = $1', [id]),
-      db.query('SELECT * FROM ameendrive_references WHERE application_id = $1', [id])
+      db.query('SELECT * FROM ameendrive_references WHERE application_id = $1', [id]),
+      db.query('SELECT * FROM ameendrive_documents WHERE application_id = $1', [id])
     ]);
     const response = {
       ...application,
       bank_accounts: bankAccounts.rows,
       bank_facilities: bankFacilities.rows,
-      references: references.rows
+      references: references.rows,
+      documents: Am_documents.rows
+      
     };
     res.json(response);
   } catch (err) {

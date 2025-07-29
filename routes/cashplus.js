@@ -86,6 +86,9 @@ router.get('/', async (req, res) => {
   }
 });
 
+
+// GET single application with children by ID
+
 // GET single application with children by ID
 router.get('/:id', async (req, res) => {
   try {
@@ -105,14 +108,16 @@ router.get('/:id', async (req, res) => {
       personalLoansExisting,
       otherFacilities,
       personalLoansUnderProcess,
-      references
+      references,
+      documentsHash
     ] = await Promise.all([
       db.query('SELECT * FROM cashplus_credit_cards_clean WHERE application_id = $1', [id]),
       db.query('SELECT * FROM cashplus_credit_cards_secured WHERE application_id = $1', [id]),
       db.query('SELECT * FROM cashplus_personal_loans_existing WHERE application_id = $1', [id]),
       db.query('SELECT * FROM cashplus_other_facilities WHERE application_id = $1', [id]),
       db.query('SELECT * FROM cashplus_personal_loans_under_process WHERE application_id = $1', [id]),
-      db.query('SELECT * FROM cashplus_references WHERE application_id = $1', [id])
+      db.query('SELECT * FROM cashplus_references WHERE application_id = $1', [id]),
+      db.query('SELECT * FROM cashplus_documents WHERE application_id = $1', [id])
     ]);
 
     // Build response
@@ -123,7 +128,8 @@ router.get('/:id', async (req, res) => {
       personal_loans_existing: personalLoansExisting.rows,
       other_facilities: otherFacilities.rows,
       personal_loans_under_process: personalLoansUnderProcess.rows,
-      references: references.rows
+      references: references.rows,
+      documents: documentsHash.rows
     };
 
     res.json(response);
@@ -133,6 +139,40 @@ router.get('/:id', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+
+
+// GET all cashplus applications for a given customer_id
+router.get('/by-customer/:customer_id', async (req, res) => {
+  try {
+    const { customer_id } = req.params;
+    if (!customer_id) {
+      return res.status(400).json({ error: "customer_id is required" });
+    }
+    const result = await db.query(
+      'SELECT * FROM cashplus_applications WHERE customer_id = $1 ORDER BY created_at DESC',
+      [customer_id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching applications by customer_id:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // POST a new cashplus application (main + child tables)
 router.post('/', async (req, res) => {

@@ -2,6 +2,13 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db1');
 
+// --- Defensive data cleaning helper ---
+function safe(val) {
+  if (val === '' || val === undefined) return null;
+  if (typeof val === 'string' && val.toLowerCase() === 'null') return null;
+  return val;
+}
+
 // POST: Create SME Asaan application with all child data
 router.post('/', async (req, res) => {
   const client = await db.connect();
@@ -27,7 +34,7 @@ router.post('/', async (req, res) => {
       "dealer_address", "dealer_email", "dealer_contact_no", "vehicle_name", "desired_loan_amount", "tenure_years",
       "pricing", "down_payment_percent", "down_payment_amount", "insurance_company_name", "tracker_company_name"
     ];
-    const values = fields.map(f => req.body[f]);
+    const values = fields.map(f => safe(req.body[f]));
     const placeholders = fields.map((_, idx) => `$${idx + 1}`).join(', ');
 
     const insertQuery = `
@@ -35,9 +42,21 @@ router.post('/', async (req, res) => {
       VALUES (${placeholders})
       RETURNING *;
     `;
-    const result = await client.query(insertQuery, values);
-    const application = result.rows[0];
-    const applicationId = application.id;
+
+    // ----------- DEBUG LOGS -------------
+    console.log("Insert fields:", fields);
+    console.log("Insert values:", values);
+
+    let application, applicationId;
+    try {
+      const result = await client.query(insertQuery, values);
+      application = result.rows[0];
+      applicationId = application.id;
+      console.log("Inserted application ID:", applicationId);
+    } catch (err) {
+      console.error("Query failed!", { insertQuery, values });
+      throw err;
+    }
 
     // ------------- CHILD TABLES --------------
 
@@ -47,7 +66,11 @@ router.post('/', async (req, res) => {
         await client.query(
           `INSERT INTO smeasaan_references (application_id, reference_no, name, cnic, relationship, address, contact_no)
            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [applicationId, ref.reference_no, ref.name, ref.cnic, ref.relationship, ref.address, ref.contact_no]
+          [
+            applicationId,
+            safe(ref.reference_no), safe(ref.name), safe(ref.cnic), safe(ref.relationship),
+            safe(ref.address), safe(ref.contact_no)
+          ]
         );
       }
     }
@@ -61,8 +84,9 @@ router.post('/', async (req, res) => {
             security_value, repayment_frequency
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
-            applicationId, loan.facility_type, loan.amount, loan.tenor, loan.purpose,
-            loan.security_nature_particular, loan.security_value, loan.repayment_frequency
+            applicationId,
+            safe(loan.facility_type), safe(loan.amount), safe(loan.tenor), safe(loan.purpose),
+            safe(loan.security_nature_particular), safe(loan.security_value), safe(loan.repayment_frequency)
           ]
         );
       }
@@ -74,7 +98,7 @@ router.post('/', async (req, res) => {
         await client.query(
           `INSERT INTO smeasaan_business_descriptions (application_id, business_type, products_services_offered)
            VALUES ($1, $2, $3)`,
-          [applicationId, desc.business_type, desc.products_services_offered]
+          [applicationId, safe(desc.business_type), safe(desc.products_services_offered)]
         );
       }
     }
@@ -87,8 +111,9 @@ router.post('/', async (req, res) => {
             application_id, type, name, terms_of_trade, cash_percent, credit_percent, tenor, relationship_since_years
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
           [
-            applicationId, mi.type, mi.name, mi.terms_of_trade, mi.cash_percent,
-            mi.credit_percent, mi.tenor, mi.relationship_since_years
+            applicationId,
+            safe(mi.type), safe(mi.name), safe(mi.terms_of_trade), safe(mi.cash_percent),
+            safe(mi.credit_percent), safe(mi.tenor), safe(mi.relationship_since_years)
           ]
         );
       }
@@ -101,7 +126,10 @@ router.post('/', async (req, res) => {
           `INSERT INTO smeasaan_financial_indicators (
             application_id, assets, liabilities, borrowings, revenue, expenses
           ) VALUES ($1, $2, $3, $4, $5, $6)`,
-          [applicationId, ind.assets, ind.liabilities, ind.borrowings, ind.revenue, ind.expenses]
+          [
+            applicationId,
+            safe(ind.assets), safe(ind.liabilities), safe(ind.borrowings), safe(ind.revenue), safe(ind.expenses)
+          ]
         );
       }
     }
@@ -116,9 +144,11 @@ router.post('/', async (req, res) => {
             total_expenses, profit_after_tax
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
           [
-            applicationId, ind.cash_in_hand, ind.cash_at_bank, ind.inventory_value, ind.investments, ind.fixed_investments,
-            ind.current_assets, ind.total_assets, ind.current_liabilities, ind.borrowings, ind.total_liabilities,
-            ind.total_equity, ind.gross_revenue, ind.total_expenses, ind.profit_after_tax
+            applicationId,
+            safe(ind.cash_in_hand), safe(ind.cash_at_bank), safe(ind.inventory_value), safe(ind.investments),
+            safe(ind.fixed_investments), safe(ind.current_assets), safe(ind.total_assets), safe(ind.current_liabilities),
+            safe(ind.borrowings), safe(ind.total_liabilities), safe(ind.total_equity), safe(ind.gross_revenue),
+            safe(ind.total_expenses), safe(ind.profit_after_tax)
           ]
         );
       }
@@ -135,27 +165,41 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET by ID: Application with all children
+
+
+
+// GET by ID: Application with application data + child tables
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
+    // Fetch the main application with all fields
     const mainResult = await db.query('SELECT * FROM smeasaan_applications WHERE id = $1', [id]);
     if (mainResult.rows.length === 0) {
       return res.status(404).json({ error: 'Application not found' });
     }
-    const application = mainResult.rows[0];
-    // Fetch all children in parallel
+    const application = mainResult.rows[0]; // Get the full row
+
+    // Fetch all child tables in parallel
     const [
-      references, existing_loans, business_descriptions,
-      market_info, financial_indicators, financial_indicators_medium
+      references,
+      existing_loans,
+      business_descriptions,
+      market_info,
+      financial_indicators,
+      financial_indicators_medium,
+      s_documents
     ] = await Promise.all([
       db.query('SELECT * FROM smeasaan_references WHERE application_id = $1', [id]),
       db.query('SELECT * FROM smeasaan_existing_loans WHERE application_id = $1', [id]),
       db.query('SELECT * FROM smeasaan_business_descriptions WHERE application_id = $1', [id]),
       db.query('SELECT * FROM smeasaan_market_info WHERE application_id = $1', [id]),
       db.query('SELECT * FROM smeasaan_financial_indicators WHERE application_id = $1', [id]),
-      db.query('SELECT * FROM smeasaan_financial_indicators_medium WHERE application_id = $1', [id])
+      db.query('SELECT * FROM smeasaan_financial_indicators_medium WHERE application_id = $1', [id]),
+      db.query('SELECT * FROM smeasaan_documents WHERE application_id = $1', [id])
     ]);
+
+    // Send combined response
     res.json({
       ...application,
       references: references.rows,
@@ -163,13 +207,59 @@ router.get('/:id', async (req, res) => {
       business_descriptions: business_descriptions.rows,
       market_info: market_info.rows,
       financial_indicators: financial_indicators.rows,
-      financial_indicators_medium: financial_indicators_medium.rows
+      financial_indicators_medium: financial_indicators_medium.rows,
+      documents: s_documents.rows
     });
   } catch (err) {
     console.error('Error fetching SME Asaan application:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// GET all SME Asaan applications (with all children)
+router.get('/', async (req, res) => {
+  try {
+    // Fetch all main applications, most recent first
+    const appsResult = await db.query('SELECT * FROM smeasaan_applications ORDER BY created_at DESC');
+    const applications = appsResult.rows;
+
+    // For each application, fetch children in parallel
+    const out = await Promise.all(applications.map(async app => {
+      const id = app.id;
+      const [
+        references,
+        existing_loans,
+        business_descriptions,
+        market_info,
+        financial_indicators,
+        financial_indicators_medium
+      ] = await Promise.all([
+        db.query('SELECT * FROM smeasaan_references WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM smeasaan_existing_loans WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM smeasaan_business_descriptions WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM smeasaan_market_info WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM smeasaan_financial_indicators WHERE application_id = $1', [id]),
+        db.query('SELECT * FROM smeasaan_financial_indicators_medium WHERE application_id = $1', [id])
+      ]);
+      return {
+        ...app,
+        references: references.rows,
+        existing_loans: existing_loans.rows,
+        business_descriptions: business_descriptions.rows,
+        market_info: market_info.rows,
+        financial_indicators: financial_indicators.rows,
+        financial_indicators_medium: financial_indicators_medium.rows
+      };
+    }));
+
+    res.json({ success: true, data: out });
+  } catch (err) {
+    console.error('Error fetching smeasaan applications with children:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
 
 
 
@@ -219,8 +309,5 @@ router.get('/by-customer/:customer_id', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-
-
 
 module.exports = router;

@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "basic-ftp": "^5.0.5",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "serve-index": "^1.9.1"
+  }
+}

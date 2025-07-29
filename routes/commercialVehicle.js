@@ -17,6 +17,10 @@ router.get('/', async (req, res) => {
   }
 });
 
+
+
+
+
 // Get ONE application by ID (with children)
 router.get('/:id', async (req, res) => {
   const { id } = req.params;
@@ -31,14 +35,16 @@ router.get('/:id', async (req, res) => {
       business_descriptions,
       market_info,
       financial_small,
-      financial_medium
+      financial_medium,
+      commercial_documents
     ] = await Promise.all([
       db.query('SELECT * FROM commercial_vehicle_references WHERE application_id = $1', [id]),
       db.query('SELECT * FROM commercial_vehicle_existing_loans WHERE application_id = $1', [id]),
       db.query('SELECT * FROM commercial_vehicle_business_descriptions WHERE application_id = $1', [id]),
       db.query('SELECT * FROM commercial_vehicle_market_info WHERE application_id = $1', [id]),
       db.query('SELECT * FROM commercial_vehicle_financial_indicators WHERE application_id = $1', [id]),
-      db.query('SELECT * FROM commercial_vehicle_financial_indicators_medium WHERE application_id = $1', [id])
+      db.query('SELECT * FROM commercial_vehicle_financial_indicators_medium WHERE application_id = $1', [id]),
+      db.query('SELECT * FROM commercial_vehicle_documents WHERE application_id = $1', [id])
     ]);
 
     res.json({
@@ -48,13 +54,15 @@ router.get('/:id', async (req, res) => {
       business_descriptions: business_descriptions.rows,
       market_info: market_info.rows,
       financial_indicators_small: financial_small.rows,
-      financial_indicators_medium: financial_medium.rows
+      financial_indicators_medium: financial_medium.rows,
+      documents: commercial_documents.rows
     });
   } catch (err) {
     console.error('Error fetching commercial vehicle application by id:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 // Get ALL applications by customer_id (with children for each)
 router.get('/by-customer/:customer_id', async (req, res) => {
