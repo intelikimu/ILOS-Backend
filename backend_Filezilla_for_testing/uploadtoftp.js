@@ -388,6 +388,12 @@ function explorerHandler(req, res) {
         }
     });
 }
+app.post("/upload/:loantype/:losid", upload.single("file"), (req, res) => {
+    console.log(req.file);
+    const { loantype, losid } = req.params;
+    
+    res.send("File uploaded successfully");
+});
 
 function getParentExplorerLink(reqPath) {
     let parts = reqPath.split("/").filter(Boolean);

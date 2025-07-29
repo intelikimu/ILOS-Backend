@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const db = require('./db');
 const bodyParser = require('body-parser');
+const applicationRoutes = require('./routes/applications'); // adjust if in a different path
+
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -114,6 +117,9 @@ app.use('/api/smeasaan', require('./routes/smeasaan'));
 app.use('/api/commercialVehicle', require('./routes/commercialVehicle'));
 app.use('/api/classic_creditcard', require('./routes/classic_creditcard'));
 app.use('/api/platinum_creditcard', require('./routes/platinum_creditcard'));
+app.use('/api/applications', applicationRoutes);
+
+
 
 // Start the server and bind to 0.0.0.0 for LAN access
 app.listen(PORT, '0.0.0.0', () => {
