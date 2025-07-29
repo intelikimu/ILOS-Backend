@@ -131,7 +131,7 @@ router.get('/recent/pb', async (req, res) => {
         SELECT 
           id,
           'CommercialVehicle' as application_type,
-          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          COALESCE(applicant_name, 'Unknown Applicant') as applicant_name,
           'Commercial Vehicle Loan' as loan_type,
           COALESCE(desired_loan_amount, 0) as amount,
           CASE 
