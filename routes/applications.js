@@ -55,6 +55,410 @@ router.get('/test/tables', async (req, res) => {
   }
 });
 
+// Test endpoint specifically for SME ASAAN applications
+router.get('/test/smeasaan', async (req, res) => {
+  try {
+    console.log('Testing SME ASAAN applications...');
+    
+    // Test if the table exists
+    const tableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'smeasaan_applications'
+      );
+    `);
+    
+    if (!tableCheck.rows[0].exists) {
+      return res.json({ 
+        error: 'Table smeasaan_applications does not exist',
+        tableExists: false 
+      });
+    }
+    
+    // Get column information
+    const columns = await db.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'smeasaan_applications'
+      ORDER BY ordinal_position;
+    `);
+    
+    // Get sample data
+    const sampleData = await db.query(`
+      SELECT 
+        id,
+        applicant_name,
+        desired_loan_amount,
+        created_at,
+        company_name,
+        business_address
+      FROM smeasaan_applications 
+      ORDER BY created_at DESC 
+      LIMIT 5;
+    `);
+    
+    // Test the actual query used in the main endpoint
+    const testQuery = await db.query(`
+      SELECT 
+        id,
+        'SMEASAAN' as application_type,
+        COALESCE(applicant_name, 'Unknown Applicant') as applicant_name,
+        'SME Loan' as loan_type,
+        COALESCE(desired_loan_amount, 0) as amount,
+        CASE 
+          WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+          ELSE 'draft'
+        END as status,
+        'high' as priority,
+        created_at as submitted_date,
+        created_at as last_update,
+        95 as completion_percentage,
+        'Islamabad' as branch
+      FROM smeasaan_applications 
+      ORDER BY created_at DESC 
+      LIMIT 4
+    `);
+    
+    res.json({
+      tableExists: true,
+      columns: columns.rows,
+      sampleData: sampleData.rows,
+      testQueryResult: testQuery.rows,
+      totalRecords: sampleData.rows.length
+    });
+    
+  } catch (err) {
+    console.error('Error testing SME ASAAN:', err);
+    res.status(500).json({ 
+      error: err.message,
+      stack: err.stack 
+    });
+  }
+});
+
+// Test endpoint specifically for AmeenDrive applications
+router.get('/test/ameendrive', async (req, res) => {
+  try {
+    console.log('Testing AmeenDrive applications...');
+    
+    // Test if the table exists
+    const tableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'ameendrive_applications'
+      );
+    `);
+    
+    if (!tableCheck.rows[0].exists) {
+      return res.json({ 
+        error: 'Table ameendrive_applications does not exist',
+        tableExists: false 
+      });
+    }
+    
+    // Get column information
+    const columns = await db.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'ameendrive_applications'
+      ORDER BY ordinal_position;
+    `);
+    
+    // Get sample data
+    const sampleData = await db.query(`
+      SELECT 
+        id,
+        applicant_full_name,
+        price_value,
+        created_at,
+        vehicle_manufacturer,
+        vehicle_model
+      FROM ameendrive_applications 
+      ORDER BY created_at DESC 
+      LIMIT 5;
+    `);
+    
+    // Test the actual query used in the main endpoint
+    const testQuery = await db.query(`
+      SELECT 
+        id,
+        'AmeenDrive' as application_type,
+        COALESCE(applicant_full_name, 'Unknown Applicant') as applicant_name,
+        'AmeenDrive Loan' as loan_type,
+        COALESCE(price_value, 0) as amount,
+        CASE 
+          WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+          ELSE 'draft'
+        END as status,
+        'medium' as priority,
+        created_at as submitted_date,
+        created_at as last_update,
+        92 as completion_percentage,
+        'Lahore Main' as branch
+      FROM ameendrive_applications 
+      ORDER BY created_at DESC 
+      LIMIT 4
+    `);
+    
+    res.json({
+      tableExists: true,
+      columns: columns.rows,
+      sampleData: sampleData.rows,
+      testQueryResult: testQuery.rows,
+      totalRecords: sampleData.rows.length
+    });
+    
+  } catch (err) {
+    console.error('Error testing AmeenDrive:', err);
+    res.status(500).json({ 
+      error: err.message,
+      stack: err.stack 
+    });
+  }
+});
+
+// Test endpoint specifically for Auto Loan applications
+router.get('/test/autoloan', async (req, res) => {
+  try {
+    console.log('Testing Auto Loan applications...');
+    
+    // Test if the table exists
+    const tableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'autoloan_applications'
+      );
+    `);
+    
+    if (!tableCheck.rows[0].exists) {
+      return res.json({ 
+        error: 'Table autoloan_applications does not exist',
+        tableExists: false 
+      });
+    }
+    
+    // Get column information
+    const columns = await db.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'autoloan_applications'
+      ORDER BY ordinal_position;
+    `);
+    
+    // Get sample data
+    const sampleData = await db.query(`
+      SELECT 
+        id,
+        first_name,
+        last_name,
+        price_value,
+        created_at,
+        vehicle_manufacturer,
+        vehicle_model
+      FROM autoloan_applications 
+      ORDER BY created_at DESC 
+      LIMIT 5;
+    `);
+    
+    // Test the actual query used in the main endpoint
+    const testQuery = await db.query(`
+      SELECT 
+        id,
+        'AutoLoan' as application_type,
+        COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+        'Auto Loan' as loan_type,
+        COALESCE(price_value, 0) as amount,
+        CASE 
+          WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+          ELSE 'draft'
+        END as status,
+        'medium' as priority,
+        created_at as submitted_date,
+        created_at as last_update,
+        92 as completion_percentage,
+        'Lahore Main' as branch
+      FROM autoloan_applications 
+      ORDER BY created_at DESC 
+      LIMIT 4
+    `);
+    
+    res.json({
+      tableExists: true,
+      columns: columns.rows,
+      sampleData: sampleData.rows,
+      testQueryResult: testQuery.rows,
+      totalRecords: sampleData.rows.length
+    });
+    
+  } catch (err) {
+    console.error('Error testing Auto Loan:', err);
+    res.status(500).json({ 
+      error: err.message,
+      stack: err.stack 
+    });
+  }
+});
+
+// Test endpoint specifically for Classic Credit Card applications
+router.get('/test/creditcard', async (req, res) => {
+  try {
+    console.log('Testing Classic Credit Card applications...');
+    
+    // Test if the table exists
+    const tableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'creditcard_applications'
+      );
+    `);
+    
+    if (!tableCheck.rows[0].exists) {
+      return res.json({ 
+        error: 'Table creditcard_applications does not exist',
+        tableExists: false 
+      });
+    }
+    
+    // Get column information
+    const columns = await db.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'creditcard_applications'
+      ORDER BY ordinal_position;
+    `);
+    
+    // Get sample data
+    const sampleData = await db.query(`
+      SELECT 
+        id,
+        full_name,
+        card_type,
+        created_at,
+        card_category,
+        application_status
+      FROM creditcard_applications 
+      ORDER BY created_at DESC 
+      LIMIT 5;
+    `);
+    
+    // Test the actual query used in the main endpoint
+    const testQuery = await db.query(`
+      SELECT 
+        id,
+        'ClassicCreditCard' as application_type,
+        COALESCE(full_name, 'Unknown Applicant') as applicant_name,
+        'Classic Credit Card' as loan_type,
+        COALESCE(0, 0) as amount,
+        CASE 
+          WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+          ELSE 'draft'
+        END as status,
+        'low' as priority,
+        created_at as submitted_date,
+        created_at as last_update,
+        82 as completion_percentage,
+        'Islamabad' as branch
+      FROM creditcard_applications 
+      ORDER BY created_at DESC 
+      LIMIT 4
+    `);
+    
+    res.json({
+      tableExists: true,
+      columns: columns.rows,
+      sampleData: sampleData.rows,
+      testQueryResult: testQuery.rows,
+      totalRecords: sampleData.rows.length
+    });
+    
+  } catch (err) {
+    console.error('Error testing Classic Credit Card:', err);
+    res.status(500).json({ 
+      error: err.message,
+      stack: err.stack 
+    });
+  }
+});
+
+// Test endpoint specifically for Platinum Credit Card applications
+router.get('/test/platinum', async (req, res) => {
+  try {
+    console.log('Testing Platinum Credit Card applications...');
+    
+    // Test if the table exists
+    const tableCheck = await db.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'platinum_card_applications'
+      );
+    `);
+    
+    if (!tableCheck.rows[0].exists) {
+      return res.json({ 
+        error: 'Table platinum_card_applications does not exist',
+        tableExists: false 
+      });
+    }
+    
+    // Get column information
+    const columns = await db.query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'platinum_card_applications'
+      ORDER BY ordinal_position;
+    `);
+    
+    // Get sample data
+    const sampleData = await db.query(`
+      SELECT 
+        id,
+        CONCAT(first_name, ' ', last_name) as full_name,
+        created_at,
+        application_status
+      FROM platinum_card_applications 
+      ORDER BY created_at DESC 
+      LIMIT 5;
+    `);
+    
+    // Test the actual query used in the main endpoint
+    const testQuery = await db.query(`
+      SELECT 
+        id,
+        'PlatinumCreditCard' as application_type,
+        COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+        'Platinum Credit Card' as loan_type,
+        COALESCE(0, 0) as amount,
+        CASE 
+          WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+          ELSE 'draft'
+        END as status,
+        'low' as priority,
+        created_at as submitted_date,
+        created_at as last_update,
+        78 as completion_percentage,
+        'Karachi Main' as branch
+      FROM platinum_card_applications 
+      ORDER BY created_at DESC 
+      LIMIT 4
+    `);
+    
+    res.json({
+      tableExists: true,
+      columns: columns.rows,
+      sampleData: sampleData.rows,
+      testQueryResult: testQuery.rows,
+      totalRecords: sampleData.rows.length
+    });
+    
+  } catch (err) {
+    console.error('Error testing Platinum Credit Card:', err);
+    res.status(500).json({ 
+      error: err.message,
+      stack: err.stack 
+    });
+  }
+});
+
 // GET recent applications for Personal Banker dashboard
 router.get('/recent/pb', async (req, res) => {
   try {
@@ -82,14 +486,14 @@ router.get('/recent/pb', async (req, res) => {
         LIMIT 4
       `),
       
-      // Auto Loan applications
+      // Auto Loan applications - check if table exists and has correct columns
       db.query(`
         SELECT 
           id,
           'AutoLoan' as application_type,
           COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
           'Auto Loan' as loan_type,
-          COALESCE(desired_loan_amount, 0) as amount,
+          COALESCE(price_value, 0) as amount,
           CASE 
             WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
             ELSE 'draft'
@@ -97,20 +501,20 @@ router.get('/recent/pb', async (req, res) => {
           'medium' as priority,
           created_at as submitted_date,
           created_at as last_update,
-          90 as completion_percentage,
+          92 as completion_percentage,
           'Lahore Main' as branch
         FROM autoloan_applications 
         ORDER BY created_at DESC 
         LIMIT 4
-      `),
+      `).catch(() => null), // Ignore if table doesn't exist
       
       // SME ASAAN applications - check if table exists and has correct columns
       db.query(`
         SELECT 
           id,
           'SMEASAAN' as application_type,
-          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
-          'Business Loan' as loan_type,
+          COALESCE(applicant_name, 'Unknown Applicant') as applicant_name,
+          'SME Loan' as loan_type,
           COALESCE(desired_loan_amount, 0) as amount,
           CASE 
             WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
@@ -153,9 +557,9 @@ router.get('/recent/pb', async (req, res) => {
         SELECT 
           id,
           'AmeenDrive' as application_type,
-          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          COALESCE(applicant_full_name, 'Unknown Applicant') as applicant_name,
           'AmeenDrive Loan' as loan_type,
-          COALESCE(facility_amount, 0) as amount,
+          COALESCE(price_value, 0) as amount,
           CASE 
             WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
             ELSE 'draft'
@@ -177,7 +581,7 @@ router.get('/recent/pb', async (req, res) => {
           'PlatinumCreditCard' as application_type,
           COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
           'Platinum Credit Card' as loan_type,
-          COALESCE(credit_limit, 0) as amount,
+          COALESCE(0, 0) as amount,
           CASE 
             WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
             ELSE 'draft'
@@ -197,9 +601,9 @@ router.get('/recent/pb', async (req, res) => {
         SELECT 
           id,
           'ClassicCreditCard' as application_type,
-          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          COALESCE(full_name, 'Unknown Applicant') as applicant_name,
           'Classic Credit Card' as loan_type,
-          COALESCE(credit_limit, 0) as amount,
+          COALESCE(0, 0) as amount,
           CASE 
             WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
             ELSE 'draft'
@@ -221,9 +625,14 @@ router.get('/recent/pb', async (req, res) => {
     let allApplications = [];
     results.forEach((result, index) => {
       if (result.status === 'fulfilled' && result.value && result.value.rows && result.value.rows.length > 0) {
+        console.log(`✅ Table ${index + 1} returned ${result.value.rows.length} applications`);
         allApplications = allApplications.concat(result.value.rows);
+      } else {
+        console.log(`❌ Table ${index + 1} failed or returned no data`);
       }
     });
+
+    console.log(`📊 Total applications collected: ${allApplications.length}`);
 
     // Sort by submitted_date (most recent first) and take only the last 4
     allApplications.sort((a, b) => {
@@ -234,6 +643,12 @@ router.get('/recent/pb', async (req, res) => {
 
     // Take only the last 4 applications
     const recentApplications = allApplications.slice(0, 4);
+    console.log(`📊 Recent applications (top 4):`, recentApplications.map(app => ({
+      id: app.id,
+      applicant_name: app.applicant_name,
+      loan_type: app.loan_type,
+      submitted_date: app.submitted_date
+    })));
 
     // Format the response to match the frontend expectations
     const formattedApplications = recentApplications.map((app, index) => ({
@@ -261,12 +676,13 @@ router.get('/recent/pb', async (req, res) => {
       ],
       timeline: [
         { date: new Date(app.submitted_date || app.created_at).toISOString().split('T')[0], event: "Application Created", status: "completed" },
-        { date: new Date(app.submitted_date || app.created_at).toISOString().split('T')[0], event: "Documents Uploaded", status: "completed" },
-        { date: new Date(app.submitted_date || app.created_at).toISOString().split('T')[0], event: "Initial Review", status: "completed" },
+        { date: new Date(app.submitted_date || app.submitted_date).toISOString().split('T')[0], event: "Documents Uploaded", status: "completed" },
+        { date: new Date(app.submitted_date || app.submitted_date).toISOString().split('T')[0], event: "Initial Review", status: "completed" },
         { date: "TBD", event: "SPU Verification", status: "pending" },
       ],
     }));
 
+    console.log(`✅ Sending ${formattedApplications.length} formatted applications to frontend`);
     res.json(formattedApplications);
   } catch (err) {
     console.error('Error fetching recent applications:', err.message);
