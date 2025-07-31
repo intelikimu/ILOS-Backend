@@ -56,27 +56,78 @@ const PORT = 8081;
 
 const LOCAL_ROOT = "C:/Users/Pc/Desktop/Mudassir/ILOS/ILOS-FullStack/ILOS-backend/ilos_loan_application_documents";
 
+// ====== CORS Middleware ======
+app.use((req, res, next) => {
+  // Allow requests from the frontend
+  res.header('Access-Control-Allow-Origin', 'http://localhost:3000');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+  } else {
+    next();
+  }
+});
 
 // ====== Multer storage config for dynamic destination ======
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        const { loanType, losId } = req.body;
-        if (!loanType || !losId)
-            return cb(new Error("loanType and losId required"));
-        const dir = path.join(LOCAL_ROOT, loanType, losId);
-        fs.mkdirSync(dir, { recursive: true });
-        cb(null, dir);
+        // Use a temporary directory first, we'll move the file later
+        const tempDir = path.join(LOCAL_ROOT, 'temp');
+        fs.mkdirSync(tempDir, { recursive: true });
+        cb(null, tempDir);
     },
     filename: (req, file, cb) => {
         cb(null, file.originalname);
     }
 });
+// Add body parser middleware to handle form data BEFORE multer
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
 const upload = multer({ storage });
 
 // ====== PB Upload API ======
 app.post("/upload", upload.single("file"), (req, res) => {
-    if (!req.file)
+    console.log('🔄 Upload server: Received upload request');
+    console.log('🔄 Upload server: Request body:', req.body);
+    console.log('🔄 Upload server: Request file:', req.file);
+    
+    if (!req.file) {
+        console.error('❌ Upload server: No file uploaded');
         return res.status(400).send("No file uploaded.");
+    }
+    
+    // Get loanType and losId from the request body
+    const { loanType, losId } = req.body;
+    
+    if (!loanType || !losId) {
+        console.error('❌ Upload server: Missing loanType or losId');
+        // Clean up the temporary file
+        fs.unlinkSync(req.file.path);
+        return res.status(400).send("loanType and losId are required");
+    }
+    
+    // Create the final destination directory
+    const finalDir = path.join(LOCAL_ROOT, loanType, losId);
+    fs.mkdirSync(finalDir, { recursive: true });
+    
+    // Move the file from temp to final location
+    const finalPath = path.join(finalDir, req.file.originalname);
+    fs.renameSync(req.file.path, finalPath);
+    
+    console.log('✅ Upload server: File uploaded successfully:', {
+        originalname: req.file.originalname,
+        filename: req.file.originalname,
+        path: finalPath,
+        size: req.file.size,
+        loanType,
+        losId
+    });
+    
     res.send(`
         <html>
         <head>
@@ -224,9 +275,14 @@ function explorerHandler(req, res) {
     // Normalize path
     let reqPath = decodeURIComponent(req.path.replace(/^\/explorer/, "")) || "/";
     let fsPath = path.join(LOCAL_ROOT, reqPath);
+    
+    console.log(`🔍 Explorer request: ${req.path}`);
+    console.log(`🔍 Normalized path: ${reqPath}`);
+    console.log(`🔍 File system path: ${fsPath}`);
 
     fs.stat(fsPath, (err, stats) => {
         if (err || !stats) {
+            console.error(`❌ File not found: ${fsPath}`, err);
             res.status(404).send("Folder or file not found.");
             return;
         }
@@ -381,8 +437,31 @@ function explorerHandler(req, res) {
                 `);
             });
         } else if (stats.isFile()) {
-            // Send file for download/view
-            res.sendFile(fsPath);
+            // Send file for download/view with proper headers
+            const fileName = path.basename(fsPath);
+            const ext = path.extname(fileName).toLowerCase();
+            
+            // Set proper MIME type based on file extension
+            let mimeType = 'application/octet-stream';
+            if (ext === '.pdf') mimeType = 'application/pdf';
+            else if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+            else if (ext === '.png') mimeType = 'image/png';
+            else if (ext === '.txt') mimeType = 'text/plain';
+            else if (ext === '.doc' || ext === '.docx') mimeType = 'application/msword';
+            else if (ext === '.xls' || ext === '.xlsx') mimeType = 'application/vnd.ms-excel';
+            
+            console.log(`📁 Serving file: ${fileName} (${mimeType}) from ${fsPath}`);
+            
+            res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+            res.setHeader('Content-Type', mimeType);
+            res.sendFile(fsPath, (err) => {
+                if (err) {
+                    console.error(`❌ Error serving file ${fileName}:`, err);
+                    res.status(500).send('Error serving file');
+                } else {
+                    console.log(`✅ Successfully served file: ${fileName}`);
+                }
+            });
         } else {
             res.status(404).send("Not a file or folder");
         }
@@ -434,3 +513,5 @@ app.listen(PORT, () => {
     console.log(`🟢 File Explorer:   http://localhost:${PORT}/explorer`);
     console.log(`🟢 Upload API:      http://localhost:${PORT}/upload`);
 });
+
+

@@ -462,20 +462,6 @@ router.get('/test/platinum', async (req, res) => {
 // GET recent applications for Personal Banker dashboard
 router.get('/recent/pb', async (req, res) => {
   try {
-    // Get pagination parameters from query string
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const search = req.query.search || '';
-    const statusFilter = req.query.status || '';
-    const loanTypeFilter = req.query.loanType || '';
-    
-    const offset = (page - 1) * limit;
-    
-    console.log(`📊 Fetching applications - Page: ${page}, Limit: ${limit}, Search: "${search}", Status: "${statusFilter}", LoanType: "${loanTypeFilter}"`);
-
-    // Build search conditions
-    const searchCondition = search ? `AND (LOWER(COALESCE(applicant_name, 'Unknown Applicant')) LIKE LOWER('%${search}%') OR LOWER(COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant')) LIKE LOWER('%${search}%') OR LOWER(COALESCE(applicant_full_name, 'Unknown Applicant')) LIKE LOWER('%${search}%') OR LOWER(COALESCE(full_name, 'Unknown Applicant')) LIKE LOWER('%${search}%'))` : '';
-    
     // Get recent applications from all application types
     const queries = [
       // CashPlus applications
@@ -496,9 +482,8 @@ router.get('/recent/pb', async (req, res) => {
           85 as completion_percentage,
           'Karachi Main' as branch
         FROM cashplus_applications 
-        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT ${limit} OFFSET ${offset}
+        LIMIT 4
       `),
       
       // Auto Loan applications - check if table exists and has correct columns
@@ -519,9 +504,8 @@ router.get('/recent/pb', async (req, res) => {
           92 as completion_percentage,
           'Lahore Main' as branch
         FROM autoloan_applications 
-        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT ${limit} OFFSET ${offset}
+        LIMIT 4
       `).catch(() => null), // Ignore if table doesn't exist
       
       // SME ASAAN applications - check if table exists and has correct columns
@@ -542,9 +526,8 @@ router.get('/recent/pb', async (req, res) => {
           95 as completion_percentage,
           'Islamabad' as branch
         FROM smeasaan_applications 
-        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT ${limit} OFFSET ${offset}
+        LIMIT 4
       `).catch(() => null), // Ignore if table doesn't exist
       
       // Commercial Vehicle applications - check if table exists and has correct columns
@@ -565,9 +548,8 @@ router.get('/recent/pb', async (req, res) => {
           88 as completion_percentage,
           'Karachi Main' as branch
         FROM commercial_vehicle_applications 
-        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT ${limit} OFFSET ${offset}
+        LIMIT 4
       `).catch(() => null), // Ignore if table doesn't exist
       
       // AmeenDrive applications - check if table exists and has correct columns
@@ -588,9 +570,8 @@ router.get('/recent/pb', async (req, res) => {
           92 as completion_percentage,
           'Lahore Main' as branch
         FROM ameendrive_applications 
-        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT ${limit} OFFSET ${offset}
+        LIMIT 4
       `).catch(() => null), // Ignore if table doesn't exist
       
       // Platinum Credit Card applications
@@ -611,9 +592,8 @@ router.get('/recent/pb', async (req, res) => {
           78 as completion_percentage,
           'Karachi Main' as branch
         FROM platinum_card_applications 
-        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT ${limit} OFFSET ${offset}
+        LIMIT 4
       `).catch(() => null), // Ignore if table doesn't exist
       
       // Classic Credit Card applications
@@ -634,9 +614,8 @@ router.get('/recent/pb', async (req, res) => {
           82 as completion_percentage,
           'Islamabad' as branch
         FROM creditcard_applications 
-        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT ${limit} OFFSET ${offset}
+        LIMIT 4
       `).catch(() => null) // Ignore if table doesn't exist
     ];
 
@@ -655,35 +634,25 @@ router.get('/recent/pb', async (req, res) => {
 
     console.log(`📊 Total applications collected: ${allApplications.length}`);
 
-    // Sort by submitted_date (most recent first)
+    // Sort by submitted_date (most recent first) and take only the last 4
     allApplications.sort((a, b) => {
       const dateA = new Date(a.submitted_date || a.created_at || 0);
       const dateB = new Date(b.submitted_date || b.created_at || 0);
       return dateB - dateA;
     });
 
-    // Apply filters
-    let filteredApplications = allApplications;
-    
-    if (statusFilter && statusFilter !== 'all') {
-      filteredApplications = filteredApplications.filter(app => app.status === statusFilter);
-    }
-    
-    if (loanTypeFilter && loanTypeFilter !== 'all') {
-      filteredApplications = filteredApplications.filter(app => app.loan_type === loanTypeFilter);
-    }
-
-    // Get total count for pagination
-    const totalCount = filteredApplications.length;
-    
-    // Apply pagination
-    const paginatedApplications = filteredApplications.slice(offset, offset + limit);
-
-    console.log(`📊 Paginated applications: ${paginatedApplications.length} of ${totalCount} total`);
+    // Take only the last 4 applications
+    const recentApplications = allApplications.slice(0, 4);
+    console.log(`📊 Recent applications (top 4):`, recentApplications.map(app => ({
+      id: app.id,
+      applicant_name: app.applicant_name,
+      loan_type: app.loan_type,
+      submitted_date: app.submitted_date
+    })));
 
     // Format the response to match the frontend expectations
-    const formattedApplications = paginatedApplications.map((app, index) => ({
-      id: `UBL-2024-${String(app.id || (index + 1)).padStart(6, '0')}`,
+    const formattedApplications = recentApplications.map((app, index) => ({
+      id: `UBL-2024-${String(index + 1).padStart(6, '0')}`,
       applicantName: app.applicant_name || 'Unknown Applicant',
       loanType: app.loan_type || 'Personal Loan',
       amount: app.amount ? `PKR ${Number(app.amount).toLocaleString()}` : 'PKR 0',
@@ -714,21 +683,194 @@ router.get('/recent/pb', async (req, res) => {
     }));
 
     console.log(`✅ Sending ${formattedApplications.length} formatted applications to frontend`);
-    
-    // Return pagination metadata along with applications
-    res.json({
-      applications: formattedApplications,
-      pagination: {
-        currentPage: page,
-        totalPages: Math.ceil(totalCount / limit),
-        totalCount: totalCount,
-        limit: limit,
-        hasNextPage: page < Math.ceil(totalCount / limit),
-        hasPrevPage: page > 1
-      }
-    });
+    res.json(formattedApplications);
   } catch (err) {
     console.error('Error fetching recent applications:', err.message);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// GET applications for SPU dashboard
+router.get('/spu', async (req, res) => {
+  try {
+    console.log('🔄 Backend: Fetching SPU applications...');
+    
+    // Get applications that are submitted to SPU from all application types
+    const queries = [
+      // CashPlus applications submitted to SPU
+      db.query(`
+        SELECT 
+          id,
+          'CashPlus' as application_type,
+          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          'CashPlus Loan' as loan_type,
+          COALESCE(amount_requested, 0) as loan_amount,
+          'submitted_to_spu' as status,
+          'medium' as priority,
+          created_at,
+          'Karachi Main' as branch
+        FROM cashplus_applications 
+        WHERE created_at IS NOT NULL
+        ORDER BY created_at DESC 
+        LIMIT 10
+      `).catch(() => null),
+      
+      // Auto Loan applications submitted to SPU
+      db.query(`
+        SELECT 
+          id,
+          'AutoLoan' as application_type,
+          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          'Auto Loan' as loan_type,
+          COALESCE(price_value, 0) as loan_amount,
+          'submitted_to_spu' as status,
+          'medium' as priority,
+          created_at,
+          'Lahore Main' as branch
+        FROM autoloan_applications 
+        WHERE created_at IS NOT NULL
+        ORDER BY created_at DESC 
+        LIMIT 10
+      `).catch(() => null),
+      
+      // SME ASAAN applications submitted to SPU
+      db.query(`
+        SELECT 
+          id,
+          'SMEASAAN' as application_type,
+          COALESCE(applicant_name, 'Unknown Applicant') as applicant_name,
+          'SME Loan' as loan_type,
+          COALESCE(desired_loan_amount, 0) as loan_amount,
+          'submitted_to_spu' as status,
+          'high' as priority,
+          created_at,
+          'Islamabad' as branch
+        FROM smeasaan_applications 
+        WHERE created_at IS NOT NULL
+        ORDER BY created_at DESC 
+        LIMIT 10
+      `).catch(() => null),
+      
+      // Commercial Vehicle applications submitted to SPU
+      db.query(`
+        SELECT 
+          id,
+          'CommercialVehicle' as application_type,
+          COALESCE(applicant_name, 'Unknown Applicant') as applicant_name,
+          'Commercial Vehicle Loan' as loan_type,
+          COALESCE(desired_loan_amount, 0) as loan_amount,
+          'submitted_to_spu' as status,
+          'high' as priority,
+          created_at,
+          'Karachi Main' as branch
+        FROM commercial_vehicle_applications 
+        WHERE created_at IS NOT NULL
+        ORDER BY created_at DESC 
+        LIMIT 10
+      `).catch(() => null),
+      
+      // AmeenDrive applications submitted to SPU
+      db.query(`
+        SELECT 
+          id,
+          'AmeenDrive' as application_type,
+          COALESCE(applicant_full_name, 'Unknown Applicant') as applicant_name,
+          'AmeenDrive Loan' as loan_type,
+          COALESCE(price_value, 0) as loan_amount,
+          'submitted_to_spu' as status,
+          'medium' as priority,
+          created_at,
+          'Lahore Main' as branch
+        FROM ameendrive_applications 
+        WHERE created_at IS NOT NULL
+        ORDER BY created_at DESC 
+        LIMIT 10
+      `).catch(() => null),
+      
+      // Platinum Credit Card applications submitted to SPU
+      db.query(`
+        SELECT 
+          id,
+          'PlatinumCreditCard' as application_type,
+          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          'Platinum Credit Card' as loan_type,
+          COALESCE(0, 0) as loan_amount,
+          'submitted_to_spu' as status,
+          'low' as priority,
+          created_at,
+          'Karachi Main' as branch
+        FROM platinum_card_applications 
+        WHERE created_at IS NOT NULL
+        ORDER BY created_at DESC 
+        LIMIT 10
+      `).catch(() => null),
+      
+      // Classic Credit Card applications submitted to SPU
+      db.query(`
+        SELECT 
+          id,
+          'ClassicCreditCard' as application_type,
+          COALESCE(full_name, 'Unknown Applicant') as applicant_name,
+          'Classic Credit Card' as loan_type,
+          COALESCE(0, 0) as loan_amount,
+          'submitted_to_spu' as status,
+          'low' as priority,
+          created_at,
+          'Islamabad' as branch
+        FROM creditcard_applications 
+        WHERE created_at IS NOT NULL
+        ORDER BY created_at DESC 
+        LIMIT 10
+      `).catch(() => null)
+    ];
+
+    const results = await Promise.allSettled(queries);
+    
+    // Combine all results and sort by created_at
+    let allApplications = [];
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value && result.value.rows && result.value.rows.length > 0) {
+        console.log(`✅ Table ${index + 1} returned ${result.value.rows.length} applications`);
+        allApplications = allApplications.concat(result.value.rows);
+      } else {
+        console.log(`❌ Table ${index + 1} failed or returned no data`);
+      }
+    });
+
+    console.log(`📊 Total SPU applications collected: ${allApplications.length}`);
+
+    // Sort by created_at (most recent first)
+    allApplications.sort((a, b) => {
+      const dateA = new Date(a.created_at || 0);
+      const dateB = new Date(b.created_at || 0);
+      return dateB - dateA;
+    });
+
+    // Format the response to match the frontend expectations
+    const formattedApplications = allApplications.map((app, index) => ({
+      id: app.id,
+      los_id: `UBL-2024-${String(app.id).padStart(6, '0')}`, // Format as UBL-2024-XXXXXX
+      applicant_name: app.applicant_name || 'Unknown Applicant',
+      loan_type: app.loan_type || 'Personal Loan',
+      loan_amount: app.loan_amount || 0,
+      status: app.status || 'submitted_to_spu',
+      priority: app.priority || 'medium',
+      assigned_officer: null, // Will be assigned by SPU
+      created_at: app.created_at || new Date().toISOString(),
+      branch: app.branch || 'Main Branch',
+      // Mock documents for SPU verification
+      documents: [
+        { id: `doc-${app.id}-1`, name: "CNIC Copy", status: "pending", required: true },
+        { id: `doc-${app.id}-2`, name: "Salary Slip", status: "pending", required: true },
+        { id: `doc-${app.id}-3`, name: "Bank Statement", status: "pending", required: true },
+        { id: `doc-${app.id}-4`, name: "Employment Letter", status: "pending", required: false },
+      ],
+    }));
+
+    console.log(`✅ Sending ${formattedApplications.length} SPU applications to frontend`);
+    res.json(formattedApplications);
+  } catch (err) {
+    console.error('Error fetching SPU applications:', err.message);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
