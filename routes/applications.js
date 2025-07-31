@@ -652,7 +652,7 @@ router.get('/recent/pb', async (req, res) => {
 
     // Format the response to match the frontend expectations
     const formattedApplications = recentApplications.map((app, index) => ({
-      id: `UBL-2024-${String(index + 1).padStart(6, '0')}`,
+      id: `LOS-${app.id}`,
       applicantName: app.applicant_name || 'Unknown Applicant',
       loanType: app.loan_type || 'Personal Loan',
       amount: app.amount ? `PKR ${Number(app.amount).toLocaleString()}` : 'PKR 0',
@@ -848,8 +848,8 @@ router.get('/spu', async (req, res) => {
 
     // Format the response to match the frontend expectations
     const formattedApplications = allApplications.map((app, index) => ({
-      id: app.id,
-      los_id: `UBL-2024-${String(app.id).padStart(6, '0')}`, // Format as UBL-2024-XXXXXX
+      id: `${app.application_type}-${app.id}`, // Create unique ID by combining type and database ID
+      los_id: `LOS-${app.id}`, // Format as LOS-{id}
       applicant_name: app.applicant_name || 'Unknown Applicant',
       loan_type: app.loan_type || 'Personal Loan',
       loan_amount: app.loan_amount || 0,
@@ -858,12 +858,13 @@ router.get('/spu', async (req, res) => {
       assigned_officer: null, // Will be assigned by SPU
       created_at: app.created_at || new Date().toISOString(),
       branch: app.branch || 'Main Branch',
+      application_type: app.application_type, // Keep the application type for reference
       // Mock documents for SPU verification
       documents: [
-        { id: `doc-${app.id}-1`, name: "CNIC Copy", status: "pending", required: true },
-        { id: `doc-${app.id}-2`, name: "Salary Slip", status: "pending", required: true },
-        { id: `doc-${app.id}-3`, name: "Bank Statement", status: "pending", required: true },
-        { id: `doc-${app.id}-4`, name: "Employment Letter", status: "pending", required: false },
+        { id: `doc-${app.application_type}-${app.id}-1`, name: "CNIC Copy", status: "pending", required: true },
+        { id: `doc-${app.application_type}-${app.id}-2`, name: "Salary Slip", status: "pending", required: true },
+        { id: `doc-${app.application_type}-${app.id}-3`, name: "Bank Statement", status: "pending", required: true },
+        { id: `doc-${app.application_type}-${app.id}-4`, name: "Employment Letter", status: "pending", required: false },
       ],
     }));
 
