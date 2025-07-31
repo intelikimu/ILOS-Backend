@@ -462,6 +462,20 @@ router.get('/test/platinum', async (req, res) => {
 // GET recent applications for Personal Banker dashboard
 router.get('/recent/pb', async (req, res) => {
   try {
+    // Get pagination parameters from query string
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const statusFilter = req.query.status || '';
+    const loanTypeFilter = req.query.loanType || '';
+    
+    const offset = (page - 1) * limit;
+    
+    console.log(`📊 Fetching applications - Page: ${page}, Limit: ${limit}, Search: "${search}", Status: "${statusFilter}", LoanType: "${loanTypeFilter}"`);
+
+    // Build search conditions
+    const searchCondition = search ? `AND (LOWER(COALESCE(applicant_name, 'Unknown Applicant')) LIKE LOWER('%${search}%') OR LOWER(COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant')) LIKE LOWER('%${search}%') OR LOWER(COALESCE(applicant_full_name, 'Unknown Applicant')) LIKE LOWER('%${search}%') OR LOWER(COALESCE(full_name, 'Unknown Applicant')) LIKE LOWER('%${search}%'))` : '';
+    
     // Get recent applications from all application types
     const queries = [
       // CashPlus applications
@@ -482,8 +496,9 @@ router.get('/recent/pb', async (req, res) => {
           85 as completion_percentage,
           'Karachi Main' as branch
         FROM cashplus_applications 
+        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT 4
+        LIMIT ${limit} OFFSET ${offset}
       `),
       
       // Auto Loan applications - check if table exists and has correct columns
@@ -504,8 +519,9 @@ router.get('/recent/pb', async (req, res) => {
           92 as completion_percentage,
           'Lahore Main' as branch
         FROM autoloan_applications 
+        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT 4
+        LIMIT ${limit} OFFSET ${offset}
       `).catch(() => null), // Ignore if table doesn't exist
       
       // SME ASAAN applications - check if table exists and has correct columns
@@ -526,8 +542,9 @@ router.get('/recent/pb', async (req, res) => {
           95 as completion_percentage,
           'Islamabad' as branch
         FROM smeasaan_applications 
+        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT 4
+        LIMIT ${limit} OFFSET ${offset}
       `).catch(() => null), // Ignore if table doesn't exist
       
       // Commercial Vehicle applications - check if table exists and has correct columns
@@ -548,8 +565,9 @@ router.get('/recent/pb', async (req, res) => {
           88 as completion_percentage,
           'Karachi Main' as branch
         FROM commercial_vehicle_applications 
+        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT 4
+        LIMIT ${limit} OFFSET ${offset}
       `).catch(() => null), // Ignore if table doesn't exist
       
       // AmeenDrive applications - check if table exists and has correct columns
@@ -570,8 +588,9 @@ router.get('/recent/pb', async (req, res) => {
           92 as completion_percentage,
           'Lahore Main' as branch
         FROM ameendrive_applications 
+        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT 4
+        LIMIT ${limit} OFFSET ${offset}
       `).catch(() => null), // Ignore if table doesn't exist
       
       // Platinum Credit Card applications
@@ -592,8 +611,9 @@ router.get('/recent/pb', async (req, res) => {
           78 as completion_percentage,
           'Karachi Main' as branch
         FROM platinum_card_applications 
+        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT 4
+        LIMIT ${limit} OFFSET ${offset}
       `).catch(() => null), // Ignore if table doesn't exist
       
       // Classic Credit Card applications
@@ -614,8 +634,9 @@ router.get('/recent/pb', async (req, res) => {
           82 as completion_percentage,
           'Islamabad' as branch
         FROM creditcard_applications 
+        WHERE 1=1 ${searchCondition}
         ORDER BY created_at DESC 
-        LIMIT 4
+        LIMIT ${limit} OFFSET ${offset}
       `).catch(() => null) // Ignore if table doesn't exist
     ];
 
@@ -634,25 +655,35 @@ router.get('/recent/pb', async (req, res) => {
 
     console.log(`📊 Total applications collected: ${allApplications.length}`);
 
-    // Sort by submitted_date (most recent first) and take only the last 4
+    // Sort by submitted_date (most recent first)
     allApplications.sort((a, b) => {
       const dateA = new Date(a.submitted_date || a.created_at || 0);
       const dateB = new Date(b.submitted_date || b.created_at || 0);
       return dateB - dateA;
     });
 
-    // Take only the last 4 applications
-    const recentApplications = allApplications.slice(0, 4);
-    console.log(`📊 Recent applications (top 4):`, recentApplications.map(app => ({
-      id: app.id,
-      applicant_name: app.applicant_name,
-      loan_type: app.loan_type,
-      submitted_date: app.submitted_date
-    })));
+    // Apply filters
+    let filteredApplications = allApplications;
+    
+    if (statusFilter && statusFilter !== 'all') {
+      filteredApplications = filteredApplications.filter(app => app.status === statusFilter);
+    }
+    
+    if (loanTypeFilter && loanTypeFilter !== 'all') {
+      filteredApplications = filteredApplications.filter(app => app.loan_type === loanTypeFilter);
+    }
+
+    // Get total count for pagination
+    const totalCount = filteredApplications.length;
+    
+    // Apply pagination
+    const paginatedApplications = filteredApplications.slice(offset, offset + limit);
+
+    console.log(`📊 Paginated applications: ${paginatedApplications.length} of ${totalCount} total`);
 
     // Format the response to match the frontend expectations
-    const formattedApplications = recentApplications.map((app, index) => ({
-      id: `UBL-2024-${String(index + 1).padStart(6, '0')}`,
+    const formattedApplications = paginatedApplications.map((app, index) => ({
+      id: `UBL-2024-${String(app.id || (index + 1)).padStart(6, '0')}`,
       applicantName: app.applicant_name || 'Unknown Applicant',
       loanType: app.loan_type || 'Personal Loan',
       amount: app.amount ? `PKR ${Number(app.amount).toLocaleString()}` : 'PKR 0',
@@ -683,7 +714,19 @@ router.get('/recent/pb', async (req, res) => {
     }));
 
     console.log(`✅ Sending ${formattedApplications.length} formatted applications to frontend`);
-    res.json(formattedApplications);
+    
+    // Return pagination metadata along with applications
+    res.json({
+      applications: formattedApplications,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalCount / limit),
+        totalCount: totalCount,
+        limit: limit,
+        hasNextPage: page < Math.ceil(totalCount / limit),
+        hasPrevPage: page > 1
+      }
+    });
   } catch (err) {
     console.error('Error fetching recent applications:', err.message);
     res.status(500).json({ error: 'Internal Server Error' });
