@@ -154,6 +154,15 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // Update application status to SPU_PENDING after successful submission
+    try {
+      await client.query(`SELECT update_status_by_los_id($1, 'SPU_PENDING')`, [applicationId]);
+      console.log(`✅ Status updated to SPU_PENDING for SME Asaan application ${applicationId}`);
+    } catch (statusError) {
+      console.error(`❌ Error updating status for SME Asaan application ${applicationId}:`, statusError.message);
+      // Don't fail the entire request if status update fails
+    }
+
     await client.query('COMMIT');
     res.status(201).json({ success: true, application, application_id: applicationId });
   } catch (err) {

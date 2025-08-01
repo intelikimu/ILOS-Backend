@@ -106,7 +106,7 @@ router.get('/test/smeasaan', async (req, res) => {
         'SME Loan' as loan_type,
         COALESCE(desired_loan_amount, 0) as amount,
         CASE 
-          WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+          WHEN created_at IS NOT NULL THEN 'under_review'
           ELSE 'draft'
         END as status,
         'high' as priority,
@@ -187,7 +187,7 @@ router.get('/test/ameendrive', async (req, res) => {
         'AmeenDrive Loan' as loan_type,
         COALESCE(price_value, 0) as amount,
         CASE 
-          WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+          WHEN created_at IS NOT NULL THEN 'under_review'
           ELSE 'draft'
         END as status,
         'medium' as priority,
@@ -269,7 +269,7 @@ router.get('/test/autoloan', async (req, res) => {
         'Auto Loan' as loan_type,
         COALESCE(price_value, 0) as amount,
         CASE 
-          WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+          WHEN created_at IS NOT NULL THEN 'under_review'
           ELSE 'draft'
         END as status,
         'medium' as priority,
@@ -350,7 +350,7 @@ router.get('/test/creditcard', async (req, res) => {
         'Classic Credit Card' as loan_type,
         COALESCE(0, 0) as amount,
         CASE 
-          WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+          WHEN created_at IS NOT NULL THEN 'under_review'
           ELSE 'draft'
         END as status,
         'low' as priority,
@@ -429,7 +429,7 @@ router.get('/test/platinum', async (req, res) => {
         'Platinum Credit Card' as loan_type,
         COALESCE(0, 0) as amount,
         CASE 
-          WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+          WHEN created_at IS NOT NULL THEN 'under_review'
           ELSE 'draft'
         END as status,
         'low' as priority,
@@ -473,7 +473,7 @@ router.get('/recent/pb', async (req, res) => {
           'CashPlus Loan' as loan_type,
           COALESCE(amount_requested, 0) as amount,
           CASE 
-            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            WHEN created_at IS NOT NULL THEN 'under_review'
             ELSE 'draft'
           END as status,
           'medium' as priority,
@@ -495,7 +495,7 @@ router.get('/recent/pb', async (req, res) => {
           'Auto Loan' as loan_type,
           COALESCE(price_value, 0) as amount,
           CASE 
-            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            WHEN created_at IS NOT NULL THEN 'under_review'
             ELSE 'draft'
           END as status,
           'medium' as priority,
@@ -517,7 +517,7 @@ router.get('/recent/pb', async (req, res) => {
           'SME Loan' as loan_type,
           COALESCE(desired_loan_amount, 0) as amount,
           CASE 
-            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            WHEN created_at IS NOT NULL THEN 'under_review'
             ELSE 'draft'
           END as status,
           'high' as priority,
@@ -533,13 +533,13 @@ router.get('/recent/pb', async (req, res) => {
       // Commercial Vehicle applications - check if table exists and has correct columns
       db.query(`
         SELECT 
-          id,
+          id,fr
           'CommercialVehicle' as application_type,
           COALESCE(applicant_name, 'Unknown Applicant') as applicant_name,
           'Commercial Vehicle Loan' as loan_type,
           COALESCE(desired_loan_amount, 0) as amount,
           CASE 
-            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            WHEN created_at IS NOT NULL THEN 'under_review'
             ELSE 'draft'
           END as status,
           'high' as priority,
@@ -561,7 +561,7 @@ router.get('/recent/pb', async (req, res) => {
           'AmeenDrive Loan' as loan_type,
           COALESCE(price_value, 0) as amount,
           CASE 
-            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            WHEN created_at IS NOT NULL THEN 'under_review'
             ELSE 'draft'
           END as status,
           'medium' as priority,
@@ -583,7 +583,7 @@ router.get('/recent/pb', async (req, res) => {
           'Platinum Credit Card' as loan_type,
           COALESCE(0, 0) as amount,
           CASE 
-            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            WHEN created_at IS NOT NULL THEN 'under_review'
             ELSE 'draft'
           END as status,
           'low' as priority,
@@ -605,7 +605,7 @@ router.get('/recent/pb', async (req, res) => {
           'Classic Credit Card' as loan_type,
           COALESCE(0, 0) as amount,
           CASE 
-            WHEN created_at IS NOT NULL THEN 'submitted_to_spu'
+            WHEN created_at IS NOT NULL THEN 'under_review'
             ELSE 'draft'
           END as status,
           'low' as priority,
@@ -616,11 +616,12 @@ router.get('/recent/pb', async (req, res) => {
         FROM creditcard_applications 
         ORDER BY created_at DESC 
         LIMIT 4
-      `).catch(() => null) // Ignore if table doesn't exist
-    ];
+              `).catch(() => null) // Ignore if table doesn't exist
+      ];
 
     const results = await Promise.allSettled(queries);
     
+
     // Combine all results and sort by submitted_date
     let allApplications = [];
     results.forEach((result, index) => {
@@ -651,35 +652,68 @@ router.get('/recent/pb', async (req, res) => {
     })));
 
     // Format the response to match the frontend expectations
-    const formattedApplications = recentApplications.map((app, index) => ({
-      id: `LOS-${app.id}`,
-      applicantName: app.applicant_name || 'Unknown Applicant',
-      loanType: app.loan_type || 'Personal Loan',
-      amount: app.amount ? `PKR ${Number(app.amount).toLocaleString()}` : 'PKR 0',
-      status: app.status || 'draft',
-      priority: app.priority || 'medium',
-      submittedDate: app.submitted_date || app.created_at || new Date().toISOString(),
-      lastUpdate: app.last_update || app.created_at || new Date().toISOString(),
-      completionPercentage: app.completion_percentage || 0,
-      branch: app.branch || 'Main Branch',
-      // Mock data for fields not in database
-      creditScore: Math.floor(Math.random() * 200) + 600,
-      monthlyIncome: `PKR ${Math.floor(Math.random() * 200000) + 50000}`,
-      age: Math.floor(Math.random() * 30) + 25,
-      riskLevel: ['low', 'medium', 'high'][Math.floor(Math.random() * 3)],
-      estimatedProcessingTime: `${Math.floor(Math.random() * 5) + 2}-${Math.floor(Math.random() * 3) + 5} days`,
-      documents: [
-        { name: "CNIC Copy", status: "submitted", required: true },
-        { name: "Salary Slip", status: "submitted", required: true },
-        { name: "Bank Statement", status: "submitted", required: true },
-        { name: "Employment Letter", status: "submitted", required: false },
-      ],
-      timeline: [
-        { date: new Date(app.submitted_date || app.created_at).toISOString().split('T')[0], event: "Application Created", status: "completed" },
-        { date: new Date(app.submitted_date || app.submitted_date).toISOString().split('T')[0], event: "Documents Uploaded", status: "completed" },
-        { date: new Date(app.submitted_date || app.submitted_date).toISOString().split('T')[0], event: "Initial Review", status: "completed" },
-        { date: "TBD", event: "SPU Verification", status: "pending" },
-      ],
+    const formattedApplications = await Promise.all(recentApplications.map(async (app, index) => {
+      // Fetch the actual los_id from ilos_applications table
+      let actualLosId = null;
+      try {
+        // Determine the loan_type for ilos_applications lookup
+        let loanTypeForLookup = 'cashplus'; // default
+        if (app.loan_type) {
+          if (app.loan_type.includes('Auto')) loanTypeForLookup = 'autoloan';
+          else if (app.loan_type.includes('SME')) loanTypeForLookup = 'smeasaan';
+          else if (app.loan_type.includes('Commercial')) loanTypeForLookup = 'commercialvehicle';
+          else if (app.loan_type.includes('Ameen')) loanTypeForLookup = 'ameendrive';
+          else if (app.loan_type.includes('Platinum')) loanTypeForLookup = 'platinumcreditcard';
+          else if (app.loan_type.includes('Classic')) loanTypeForLookup = 'classiccreditcard';
+        }
+
+        const losIdResult = await db.query(
+          `SELECT los_id FROM ilos_applications WHERE loan_type = $1 OR id = $2`,
+          [loanTypeForLookup, app.id]
+        );
+        
+        if (losIdResult.rows.length > 0) {
+          actualLosId = losIdResult.rows[0].los_id;
+          console.log(`✅ Found los_id ${actualLosId} for PB application ${app.id}`);
+        } else {
+          console.log(`⚠️ No los_id found for PB application ${app.id}`);
+          actualLosId = `LOS-${app.id}`; // Fallback to generated los_id
+        }
+      } catch (error) {
+        console.error(`❌ Error fetching los_id for PB application ${app.id}:`, error.message);
+        actualLosId = `LOS-${app.id}`; // Fallback to generated los_id
+      }
+
+      return {
+        id: `LOS-${actualLosId}`, // Use actual los_id from ilos_applications
+        applicantName: app.applicant_name || 'Unknown Applicant',
+        loanType: app.loan_type || 'Personal Loan',
+        amount: app.amount ? `PKR ${Number(app.amount).toLocaleString()}` : 'PKR 0',
+        status: app.status || 'draft',
+        priority: app.priority || 'medium',
+        submittedDate: app.submitted_date || app.created_at || new Date().toISOString(),
+        lastUpdate: app.last_update || app.created_at || new Date().toISOString(),
+        completionPercentage: app.completion_percentage || 0,
+        branch: app.branch || 'Main Branch',
+        // Mock data for fields not in database
+        creditScore: Math.floor(Math.random() * 200) + 600,
+        monthlyIncome: `PKR ${Math.floor(Math.random() * 200000) + 50000}`,
+        age: Math.floor(Math.random() * 30) + 25,
+        riskLevel: ['low', 'medium', 'high'][Math.floor(Math.random() * 3)],
+        estimatedProcessingTime: `${Math.floor(Math.random() * 5) + 2}-${Math.floor(Math.random() * 3) + 5} days`,
+        documents: [
+          { name: "CNIC Copy", status: "submitted", required: true },
+          { name: "Salary Slip", status: "submitted", required: true },
+          { name: "Bank Statement", status: "submitted", required: true },
+          { name: "Employment Letter", status: "submitted", required: false },
+        ],
+        timeline: [
+          { date: new Date(app.submitted_date || app.created_at).toISOString().split('T')[0], event: "Application Created", status: "completed" },
+          { date: new Date(app.submitted_date || app.submitted_date).toISOString().split('T')[0], event: "Documents Uploaded", status: "completed" },
+          { date: new Date(app.submitted_date || app.submitted_date).toISOString().split('T')[0], event: "Initial Review", status: "completed" },
+          { date: "TBD", event: "SPU Verification", status: "pending" },
+        ],
+      };
     }));
 
     console.log(`✅ Sending ${formattedApplications.length} formatted applications to frontend`);
@@ -700,128 +734,130 @@ router.get('/spu', async (req, res) => {
       // CashPlus applications submitted to SPU
       db.query(`
         SELECT 
-          id,
+          ca.id,
           'CashPlus' as application_type,
-          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          COALESCE(CONCAT(ca.first_name, ' ', ca.last_name), 'Unknown Applicant') as applicant_name,
           'CashPlus Loan' as loan_type,
-          COALESCE(amount_requested, 0) as loan_amount,
-          'submitted_to_spu' as status,
+          COALESCE(ca.amount_requested, 0) as loan_amount,
+          COALESCE(ca.status, 'submitted_to_spu') as status,
           'medium' as priority,
-          created_at,
+          ca.created_at,
           'Karachi Main' as branch
-        FROM cashplus_applications 
-        WHERE created_at IS NOT NULL
-        ORDER BY created_at DESC 
+        FROM cashplus_applications ca
+        WHERE ca.created_at IS NOT NULL
+        ORDER BY ca.created_at DESC 
         LIMIT 10
       `).catch(() => null),
       
       // Auto Loan applications submitted to SPU
       db.query(`
         SELECT 
-          id,
+          al.id,
           'AutoLoan' as application_type,
-          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          COALESCE(CONCAT(al.first_name, ' ', al.last_name), 'Unknown Applicant') as applicant_name,
           'Auto Loan' as loan_type,
-          COALESCE(price_value, 0) as loan_amount,
-          'submitted_to_spu' as status,
+          COALESCE(al.price_value, 0) as loan_amount,
+          COALESCE(al.status, 'submitted_to_spu') as status,
           'medium' as priority,
-          created_at,
+          al.created_at,
           'Lahore Main' as branch
-        FROM autoloan_applications 
-        WHERE created_at IS NOT NULL
-        ORDER BY created_at DESC 
+        FROM autoloan_applications al
+        WHERE al.created_at IS NOT NULL
+        ORDER BY al.created_at DESC 
         LIMIT 10
       `).catch(() => null),
       
       // SME ASAAN applications submitted to SPU
       db.query(`
         SELECT 
-          id,
+          sa.id,
           'SMEASAAN' as application_type,
-          COALESCE(applicant_name, 'Unknown Applicant') as applicant_name,
+          COALESCE(sa.applicant_name, 'Unknown Applicant') as applicant_name,
           'SME Loan' as loan_type,
-          COALESCE(desired_loan_amount, 0) as loan_amount,
-          'submitted_to_spu' as status,
+          COALESCE(sa.desired_loan_amount, 0) as loan_amount,
+          COALESCE(sa.status, 'submitted_to_spu') as status,
           'high' as priority,
-          created_at,
+          sa.created_at,
           'Islamabad' as branch
-        FROM smeasaan_applications 
-        WHERE created_at IS NOT NULL
-        ORDER BY created_at DESC 
+        FROM smeasaan_applications sa
+        WHERE sa.created_at IS NOT NULL
+        ORDER BY sa.created_at DESC 
         LIMIT 10
       `).catch(() => null),
       
       // Commercial Vehicle applications submitted to SPU
       db.query(`
         SELECT 
-          id,
+          cv.id,
           'CommercialVehicle' as application_type,
-          COALESCE(applicant_name, 'Unknown Applicant') as applicant_name,
+          COALESCE(cv.applicant_name, 'Unknown Applicant') as applicant_name,
           'Commercial Vehicle Loan' as loan_type,
-          COALESCE(desired_loan_amount, 0) as loan_amount,
-          'submitted_to_spu' as status,
+          COALESCE(cv.desired_loan_amount, 0) as loan_amount,
+          COALESCE(cv.status, 'submitted_to_spu') as status,
           'high' as priority,
-          created_at,
+          cv.created_at,
           'Karachi Main' as branch
-        FROM commercial_vehicle_applications 
-        WHERE created_at IS NOT NULL
-        ORDER BY created_at DESC 
+        FROM commercial_vehicle_applications cv
+        WHERE cv.created_at IS NOT NULL
+        ORDER BY cv.created_at DESC 
         LIMIT 10
       `).catch(() => null),
       
       // AmeenDrive applications submitted to SPU
       db.query(`
         SELECT 
-          id,
+          ad.id,
           'AmeenDrive' as application_type,
-          COALESCE(applicant_full_name, 'Unknown Applicant') as applicant_name,
+          COALESCE(ad.applicant_full_name, 'Unknown Applicant') as applicant_name,
           'AmeenDrive Loan' as loan_type,
-          COALESCE(price_value, 0) as loan_amount,
-          'submitted_to_spu' as status,
+          COALESCE(ad.price_value, 0) as loan_amount,
+          COALESCE(ad.status, 'submitted_to_spu') as status,
           'medium' as priority,
-          created_at,
+          ad.created_at,
           'Lahore Main' as branch
-        FROM ameendrive_applications 
-        WHERE created_at IS NOT NULL
-        ORDER BY created_at DESC 
+        FROM ameendrive_applications ad
+        WHERE ad.created_at IS NOT NULL
+        ORDER BY ad.created_at DESC 
         LIMIT 10
       `).catch(() => null),
       
       // Platinum Credit Card applications submitted to SPU
       db.query(`
         SELECT 
-          id,
+          pc.id,
           'PlatinumCreditCard' as application_type,
-          COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+          COALESCE(CONCAT(pc.first_name, ' ', pc.last_name), 'Unknown Applicant') as applicant_name,
           'Platinum Credit Card' as loan_type,
           COALESCE(0, 0) as loan_amount,
-          'submitted_to_spu' as status,
+          COALESCE(pc.status, 'submitted_to_spu') as status,
           'low' as priority,
-          created_at,
+          pc.created_at,
           'Karachi Main' as branch
-        FROM platinum_card_applications 
-        WHERE created_at IS NOT NULL
-        ORDER BY created_at DESC 
+        FROM platinum_card_applications pc
+        WHERE pc.created_at IS NOT NULL
+        ORDER BY pc.created_at DESC 
         LIMIT 10
       `).catch(() => null),
       
       // Classic Credit Card applications submitted to SPU
       db.query(`
         SELECT 
-          id,
+          cc.id,
           'ClassicCreditCard' as application_type,
-          COALESCE(full_name, 'Unknown Applicant') as applicant_name,
+          COALESCE(cc.full_name, 'Unknown Applicant') as applicant_name,
           'Classic Credit Card' as loan_type,
           COALESCE(0, 0) as loan_amount,
-          'submitted_to_spu' as status,
+          COALESCE(cc.status, 'submitted_to_spu') as status,
           'low' as priority,
-          created_at,
+          cc.created_at,
           'Islamabad' as branch
-        FROM creditcard_applications 
-        WHERE created_at IS NOT NULL
-        ORDER BY created_at DESC 
+        FROM creditcard_applications cc
+        WHERE cc.created_at IS NOT NULL
+        ORDER BY cc.created_at DESC 
         LIMIT 10
       `).catch(() => null)
+
+      
     ];
 
     const results = await Promise.allSettled(queries);
@@ -847,25 +883,47 @@ router.get('/spu', async (req, res) => {
     });
 
     // Format the response to match the frontend expectations
-    const formattedApplications = allApplications.map((app, index) => ({
-      id: `${app.application_type}-${app.id}`, // Create unique ID by combining type and database ID
-      los_id: `LOS-${app.id}`, // Format as LOS-{id}
-      applicant_name: app.applicant_name || 'Unknown Applicant',
-      loan_type: app.loan_type || 'Personal Loan',
-      loan_amount: app.loan_amount || 0,
-      status: app.status || 'submitted_to_spu',
-      priority: app.priority || 'medium',
-      assigned_officer: null, // Will be assigned by SPU
-      created_at: app.created_at || new Date().toISOString(),
-      branch: app.branch || 'Main Branch',
-      application_type: app.application_type, // Keep the application type for reference
-      // Mock documents for SPU verification
-      documents: [
-        { id: `doc-${app.application_type}-${app.id}-1`, name: "CNIC Copy", status: "pending", required: true },
-        { id: `doc-${app.application_type}-${app.id}-2`, name: "Salary Slip", status: "pending", required: true },
-        { id: `doc-${app.application_type}-${app.id}-3`, name: "Bank Statement", status: "pending", required: true },
-        { id: `doc-${app.application_type}-${app.id}-4`, name: "Employment Letter", status: "pending", required: false },
-      ],
+    const formattedApplications = await Promise.all(allApplications.map(async (app, index) => {
+      // Fetch the actual los_id from ilos_applications table
+      let actualLosId = null;
+      try {
+        const losIdResult = await db.query(
+          `SELECT los_id FROM ilos_applications WHERE loan_type = $1 OR id = $2`,
+          [app.application_type.toLowerCase(), app.id]
+        );
+        
+        if (losIdResult.rows.length > 0) {
+          actualLosId = losIdResult.rows[0].los_id;
+          console.log(`✅ Found los_id ${actualLosId} for ${app.application_type} application ${app.id}`);
+        } else {
+          console.log(`⚠️ No los_id found for ${app.application_type} application ${app.id}`);
+          actualLosId = `LOS-${app.id}`; // Fallback to generated los_id
+        }
+      } catch (error) {
+        console.error(`❌ Error fetching los_id for ${app.application_type} application ${app.id}:`, error.message);
+        actualLosId = `LOS-${app.id}`; // Fallback to generated los_id
+      }
+
+      return {
+        id: `${app.application_type}-${app.id}`, // Create unique ID by combining type and database ID
+        los_id: `LOS-${actualLosId}`, // Use actual los_id from ilos_applications
+        applicant_name: app.applicant_name || 'Unknown Applicant',
+        loan_type: app.loan_type || 'Personal Loan',
+        loan_amount: app.loan_amount || 0,
+        status: app.status || 'under_review',
+        priority: app.priority || 'medium',
+        assigned_officer: null, // Will be assigned by SPU
+        created_at: app.created_at || new Date().toISOString(),
+        branch: app.branch || 'Main Branch',
+        application_type: app.application_type, // Keep the application type for reference
+        // Mock documents for SPU verification
+        documents: [
+          { id: `doc-${app.application_type}-${app.id}-1`, name: "CNIC Copy", status: "pending", required: true },
+          { id: `doc-${app.application_type}-${app.id}-2`, name: "Salary Slip", status: "pending", required: true },
+          { id: `doc-${app.application_type}-${app.id}-3`, name: "Bank Statement", status: "pending", required: true },
+          { id: `doc-${app.application_type}-${app.id}-4`, name: "Employment Letter", status: "pending", required: false },
+        ],
+      };
     }));
 
     console.log(`✅ Sending ${formattedApplications.length} SPU applications to frontend`);
@@ -1028,5 +1086,63 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+
+// Update application status by los_id
+router.post('/update-status', async (req, res) => {
+  try {
+    const { losId, status, applicationType } = req.body
+    //change los to int
+    const losIdInt = parseInt(losId)
+    
+
+    if (!losIdInt || !status || !applicationType) {
+      return res.status(400).json({ 
+        error: 'losIdInt, status, and applicationType are required' 
+      })
+    }
+
+    // Map application type to table name
+    const tableMap = {
+      'CashPlus': 'cashplus_applications',
+      'AutoLoan': 'autoloan_applications',
+      'SMEASAAN': 'smeasaan_applications',
+      'CommercialVehicle': 'commercial_vehicle_applications',
+      'AmeenDrive': 'ameendrive_applications',
+      'PlatinumCreditCard': 'platinum_card_applications',
+      'ClassicCreditCard': 'creditcard_applications'
+    }
+
+    const tableName = tableMap[applicationType]
+    if (!tableName) {
+      return res.status(400).json({ 
+        error: 'Invalid application type' 
+      })
+    }
+    
+    // Update status in the specific form table
+    const result = await db.query(
+      `select update_status_by_los_id($1, $2)`,
+      [losIdInt, status]
+    )
+  
+
+    console.log(`✅ Status updated to ${status} for ${applicationType} application ${losId}`)
+
+    res.json({
+      success: true,
+      message: `New Status updated to ${status}`,
+      losId: losIdInt,
+      status: status,
+      applicationType: applicationType
+    })
+
+  } catch (error) {
+    console.error('❌ Error updating status:', error.message)
+    res.status(500).json({ 
+      error: 'Failed to update application status',
+      details: error.message 
+    })
+  }
+})
 
 module.exports = router;
