@@ -1,52 +1,3 @@
-
-
-
-/*
-// ILOS Read-Only File Explorer Server
-
-const express = require("express");
-const serveIndex = require("serve-index");
-const path = require("path");
-
-const app = express();
-const PORT = 8081;
-
-// Root folder containing all loan type folders (edit this path as needed)
-const LOCAL_ROOT = "D:/Ilos_loan_application_documents";
-
-// ====== READ-ONLY FILE EXPLORER ENDPOINT ======
-app.use(
-    "/explorer",
-    // Only allow GET and HEAD for extra security
-    (req, res, next) => {
-        if (req.method !== "GET" && req.method !== "HEAD") {
-            return res.status(405).send("Method Not Allowed");
-        }
-        next();
-    },
-    express.static(LOCAL_ROOT),
-    serveIndex(LOCAL_ROOT, { icons: true, view: "details" })
-);
-
-// ====== HEALTH CHECK (optional root endpoint) ======
-app.get("/", (req, res) => res.send(`
-    <h2>ILOS Read-Only File Explorer Running</h2>
-    <p>Browse files here: <a href="/explorer" target="_blank">/explorer</a></p>
-`));
-
-// ====== START SERVER ======
-app.listen(PORT, () => {
-    console.log(`🟢 File explorer running at: http://localhost:${PORT}/explorer`);
-});
-
-
-
-
-*/
-
-
-
-
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
@@ -98,21 +49,29 @@ app.post("/upload", upload.single("file"), (req, res) => {
     
     if (!req.file) {
         console.error('❌ Upload server: No file uploaded');
-        return res.status(400).send("No file uploaded.");
+        return res.status(400).json({ error: "No file uploaded." });
     }
     
-    // Get loanType and losId from the request body
-    const { loanType, losId } = req.body;
+    // Get loanType and losId from the request body (handle both field name formats)
+    const { loanType, losId, loan_type, los_id } = req.body;
     
-    if (!loanType || !losId) {
-        console.error('❌ Upload server: Missing loanType or losId');
+    // Use either format (camelCase or snake_case)
+    const finalLoanType = loanType || loan_type;
+    const finalLosId = losId || los_id;
+    
+    if (!finalLoanType || !finalLosId) {
+        console.error('❌ Upload server: Missing required fields');
+        console.error('❌ Upload server: Received fields:', req.body);
         // Clean up the temporary file
         fs.unlinkSync(req.file.path);
-        return res.status(400).send("loanType and losId are required");
+        return res.status(400).json({ 
+            error: "loanType/loan_type and losId/los_id are required",
+            received: req.body 
+        });
     }
     
     // Create the final destination directory
-    const finalDir = path.join(LOCAL_ROOT, loanType, losId);
+    const finalDir = path.join(LOCAL_ROOT, finalLoanType, `los-${finalLosId}`);
     fs.mkdirSync(finalDir, { recursive: true });
     
     // Move the file from temp to final location
@@ -124,36 +83,54 @@ app.post("/upload", upload.single("file"), (req, res) => {
         filename: req.file.originalname,
         path: finalPath,
         size: req.file.size,
-        loanType,
-        losId
+        loanType: finalLoanType,
+        losId: finalLosId
     });
     
-    res.send(`
-        <html>
-        <head>
-            <meta http-equiv="refresh" content="2;url=/pb-upload" />
-            <title>Upload Success</title>
-            <style>
-                body { background:#eaf3fb;font-family:Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0; }
-                .card { background:#fff; padding:32px 40px; border-radius:14px; box-shadow:0 4px 24px 0 rgba(0,55,130,0.09); text-align:center;}
-                h3 { color:#2374ab;}
-                a { color:#1976d2; text-decoration:none; font-weight:600;}
-                a:hover { text-decoration:underline;}
-            </style>
-        </head>
-        <body>
-            <div class="card">
-                <h3>✅ Uploaded: ${req.file.originalname}</h3>
-                <p>Folder: <b>${req.body.loanType}/${req.body.losId}/</b></p>
-                <p>
-                    <a href="/pb-upload">Upload Another</a> |
-                    <a href="/explorer" target="_blank">Go to Document Explorer &rarr;</a>
-                </p>
-                <small>Redirecting to upload page...</small>
-            </div>
-        </body>
-        </html>
-    `);
+    // Check if this is an API call (has Accept header with application/json) or form submission
+    const isApiCall = req.headers.accept && req.headers.accept.includes('application/json');
+    
+    if (isApiCall) {
+        // Return JSON response for API calls
+        res.json({
+            success: true,
+            message: "File uploaded successfully",
+            file: {
+                name: req.file.originalname,
+                size: req.file.size,
+                path: finalPath
+            },
+            folder: `${finalLoanType}/los-${finalLosId}/`
+        });
+    } else {
+        // Return HTML response for form submissions
+        res.send(`
+            <html>
+            <head>
+                <meta http-equiv="refresh" content="2;url=/pb-upload" />
+                <title>Upload Success</title>
+                <style>
+                    body { background:#eaf3fb;font-family:Segoe UI,Arial,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0; }
+                    .card { background:#fff; padding:32px 40px; border-radius:14px; box-shadow:0 4px 24px 0 rgba(0,55,130,0.09); text-align:center;}
+                    h3 { color:#2374ab;}
+                    a { color:#1976d2; text-decoration:none; font-weight:600;}
+                    a:hover { text-decoration:underline;}
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <h3>✅ Uploaded: ${req.file.originalname}</h3>
+                    <p>Folder: <b>${finalLoanType}/los-${finalLosId}/</b></p>
+                    <p>
+                        <a href="/pb-upload">Upload Another</a> |
+                        <a href="/explorer" target="_blank">Go to Document Explorer &rarr;</a>
+                    </p>
+                    <small>Redirecting to upload page...</small>
+                </div>
+            </body>
+            </html>
+        `);
+    }
 });
 
 // ====== PB Upload Form (browser UI, blue theme) ======
@@ -243,17 +220,17 @@ app.get("/pb-upload", (req, res) => {
         <form action="/upload" method="post" enctype="multipart/form-data">
           <label>
             Loan Type
-            <select name="loanType" required>
-              <option value="">Select Loan Type...</option>
-              <option value="cashplus">Cashplus</option>
-              <option value="creditcard">Credit Card</option>
-              <option value="autoloan">Auto Loan</option>
-              <option value="ameendrive">AmeenDrive</option>
-            </select>
-          </label>
-          <label>
-            LOS ID
-            <input type="text" name="losId" required placeholder="e.g. LOS-12345"/>
+                         <select name="loan_type" required>
+               <option value="">Select Loan Type...</option>
+               <option value="cashplus">Cashplus</option>
+               <option value="creditcard">Credit Card</option>
+               <option value="autoloan">Auto Loan</option>
+               <option value="ameendrive">AmeenDrive</option>
+             </select>
+           </label>
+           <label>
+             LOS ID
+             <input type="text" name="los_id" required placeholder="e.g. 19 (without LOS- prefix)"/>
           </label>
           <label>
             Select File
@@ -270,6 +247,182 @@ app.get("/pb-upload", (req, res) => {
 
 // ====== Blue Themed Explorer (No extra files, no serve-index) ======
 app.get(/^\/explorer(\/.*)?$/, explorerHandler);
+
+// ====== Generic LOS ID Filtered Explorer ======
+app.get("/api/documents/:losId", (req, res) => {
+    const { losId } = req.params;
+    const { applicationType } = req.query;
+    
+    console.log(`🔍 LOS ID Filtered Explorer request: LOS-${losId}, Type: ${applicationType}`);
+    
+    if (!losId) {
+        return res.status(400).json({ error: "LOS ID is required" });
+    }
+    
+    // Determine the application type path
+    let appTypePath = 'temp'; // default
+    if (applicationType) {
+        switch (applicationType.toLowerCase()) {
+            case 'cashplus':
+                appTypePath = 'cashplus';
+                break;
+            case 'autoloan':
+                appTypePath = 'AutoLoan';
+                break;
+            case 'smeasaan':
+                appTypePath = 'smeasaan';
+                break;
+            case 'commercialvehicle':
+                appTypePath = 'commercialVehicle';
+                break;
+            case 'ameendrive':
+                appTypePath = 'ameendrive';
+                break;
+            case 'platinumcreditcard':
+            case 'classiccreditcard':
+                appTypePath = 'creditcard';
+                break;
+            default:
+                appTypePath = 'temp';
+        }
+    }
+    
+    // Build the path to the specific LOS folder
+    const losFolderPath = path.join(LOCAL_ROOT, appTypePath, `los-${losId}`);
+    console.log(`🔍 Looking for documents in: ${losFolderPath}`);
+    
+    // Check if the LOS folder exists
+    fs.stat(losFolderPath, (err, stats) => {
+        if (err || !stats || !stats.isDirectory()) {
+            console.log(`❌ LOS folder not found: ${losFolderPath}`);
+            return res.json({
+                losId: `LOS-${losId}`,
+                applicationType: applicationType,
+                exists: false,
+                documents: [],
+                message: `No documents found for LOS-${losId}`
+            });
+        }
+        
+        // Read the contents of the LOS folder
+        fs.readdir(losFolderPath, { withFileTypes: true }, (err, files) => {
+            if (err) {
+                console.error(`❌ Error reading LOS folder: ${err.message}`);
+                return res.status(500).json({ 
+                    error: "Could not read documents folder",
+                    details: err.message 
+                });
+            }
+            
+            // Filter and format the documents
+            const documents = files
+                .filter(file => !file.name.startsWith('.')) // Exclude hidden files
+                .map(file => {
+                    const filePath = path.join(losFolderPath, file.name);
+                    const stats = fs.statSync(filePath);
+                    
+                    return {
+                        name: file.name,
+                        type: file.isDirectory() ? 'folder' : 'file',
+                        size: stats.size,
+                        modified: stats.mtime,
+                        path: `/explorer/${appTypePath}/los-${losId}/${encodeURIComponent(file.name)}`,
+                        downloadUrl: file.isDirectory() ? null : `/explorer/${appTypePath}/los-${losId}/${encodeURIComponent(file.name)}`
+                    };
+                })
+                .sort((a, b) => {
+                    // Folders first, then files, alphabetical
+                    if (a.type === 'folder' && b.type !== 'folder') return -1;
+                    if (a.type !== 'folder' && b.type === 'folder') return 1;
+                    return a.name.localeCompare(b.name);
+                });
+            
+            console.log(`✅ Found ${documents.length} documents for LOS-${losId}`);
+            
+            res.json({
+                losId: `LOS-${losId}`,
+                applicationType: applicationType,
+                exists: true,
+                documents: documents,
+                folderPath: `${appTypePath}/los-${losId}`,
+                message: `Found ${documents.length} documents for LOS-${losId}`
+            });
+        });
+    });
+});
+
+// ====== Search for LOS ID across all application types ======
+app.get("/api/documents/search/:losId", (req, res) => {
+    const { losId } = req.params;
+    
+    console.log(`🔍 Searching for LOS-${losId} across all application types`);
+    
+    if (!losId) {
+        return res.status(400).json({ error: "LOS ID is required" });
+    }
+    
+    const applicationTypes = [
+        'cashplus',
+        'AutoLoan', 
+        'smeasaan',
+        'commercialVehicle',
+        'ameendrive',
+        'creditcard'
+    ];
+    
+    const results = [];
+    
+    // Search through each application type
+    applicationTypes.forEach(appType => {
+        const losFolderPath = path.join(LOCAL_ROOT, appType, `los-${losId}`);
+        
+        try {
+            const stats = fs.statSync(losFolderPath);
+            if (stats.isDirectory()) {
+                const files = fs.readdirSync(losFolderPath, { withFileTypes: true });
+                const documents = files
+                    .filter(file => !file.name.startsWith('.'))
+                    .map(file => {
+                        const filePath = path.join(losFolderPath, file.name);
+                        const fileStats = fs.statSync(filePath);
+                        
+                        return {
+                            name: file.name,
+                            type: file.isDirectory() ? 'folder' : 'file',
+                            size: fileStats.size,
+                            modified: fileStats.mtime,
+                            path: `/explorer/${appType}/los-${losId}/${encodeURIComponent(file.name)}`,
+                            downloadUrl: file.isDirectory() ? null : `/explorer/${appType}/los-${losId}/${encodeURIComponent(file.name)}`
+                        };
+                    })
+                    .sort((a, b) => {
+                        if (a.type === 'folder' && b.type !== 'folder') return -1;
+                        if (a.type !== 'folder' && b.type === 'folder') return 1;
+                        return a.name.localeCompare(b.name);
+                    });
+                
+                results.push({
+                    applicationType: appType,
+                    exists: true,
+                    documents: documents,
+                    folderPath: `${appType}/los-${losId}`,
+                    documentCount: documents.length
+                });
+            }
+        } catch (err) {
+            // Folder doesn't exist for this application type, skip
+        }
+    });
+    
+    console.log(`✅ Search results for LOS-${losId}:`, results);
+    
+    res.json({
+        losId: `LOS-${losId}`,
+        searchResults: results,
+        totalFound: results.length,
+        message: `Found documents in ${results.length} application types for LOS-${losId}`
+    });
+});
 
 function explorerHandler(req, res) {
     // Normalize path
@@ -499,7 +652,7 @@ app.get("/", (req, res) => res.send(`
       <div class="links">
         <ul>
           <li><a href="/pb-upload">PB: Upload Customer Document (Form)</a></li>
-          <li><b>API:</b> <code>POST /upload</code> (fields: loanType, losId, file)</li>
+                     <li><b>API:</b> <code>POST /upload</code> (fields: loan_type, los_id, file)</li>
           <li><a href="/explorer" target="_blank">SPU: Read-only File Explorer</a></li>
         </ul>
       </div>

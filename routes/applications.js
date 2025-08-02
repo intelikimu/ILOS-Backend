@@ -707,6 +707,54 @@ router.post('/update-status', async (req, res) => {
   }
 })
 
+// Get form data by los_id using database function
+router.get('/form/:losId', async (req, res) => {
+  try {
+    const { losId } = req.params
+    const losIdInt = parseInt(losId)
+
+    if (!losIdInt) {
+      return res.status(400).json({ 
+        error: 'Valid los_id is required' 
+      })
+    }
+
+    console.log(`🔄 Backend: Fetching form data for LOS ID: ${losIdInt}`)
+
+    // Call the database function get_form_by_los_id
+    const result = await db.query(
+      `SELECT get_form_by_los_id($1)`,
+      [losIdInt]
+    )
+
+    if (!result.rows || result.rows.length === 0) {
+      console.log(`❌ No form data found for LOS ID: ${losIdInt}`)
+      return res.status(404).json({ 
+        error: 'Form data not found',
+        losId: losIdInt
+      })
+    }
+
+    const formData = result.rows[0].get_form_by_los_id
+
+    console.log(`✅ Successfully fetched form data for LOS ID: ${losIdInt}`)
+    console.log(`📋 Form data:`, formData)
+
+    res.json({
+      success: true,
+      losId: losIdInt,
+      formData: formData
+    })
+
+  } catch (error) {
+    console.error('❌ Error fetching form data:', error.message)
+    res.status(500).json({ 
+      error: 'Failed to fetch form data',
+      details: error.message 
+    })
+  }
+})
+
 // Generic endpoint for getting applications by department
 router.get('/department/:dept', async (req, res) => {
   try {
