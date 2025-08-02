@@ -707,6 +707,156 @@ router.post('/update-status', async (req, res) => {
   }
 })
 
+// Update document checklist by los_id and field name
+router.post('/update-checklist', async (req, res) => {
+  try {
+    const { losId, fieldName, isVerified } = req.body
+    
+    // Convert losId to int
+    const losIdInt = parseInt(losId)
+    
+    if (!losIdInt || !fieldName || typeof isVerified !== 'boolean') {
+      return res.status(400).json({ 
+        error: 'losId, fieldName, and isVerified (boolean) are required' 
+      })
+    }
+
+    console.log(`🔄 Backend: Updating checklist for LOS ID: ${losIdInt}, Field: ${fieldName}, Verified: ${isVerified}`)
+
+    // Call the database function update_checklist
+    const result = await db.query(
+      `SELECT update_checklist($1, $2, $3)`,
+      [losIdInt, fieldName, isVerified]
+    )
+
+    console.log(`✅ Checklist updated successfully for LOS ID: ${losIdInt}, Field: ${fieldName}, Verified: ${isVerified}`)
+
+    res.json({
+      success: true,
+      message: `Checklist field ${fieldName} updated to ${isVerified ? 'verified' : 'rejected'}`,
+      losId: losIdInt,
+      fieldName: fieldName,
+      isVerified: isVerified
+    })
+
+  } catch (error) {
+    console.error('❌ Error updating checklist:', error.message)
+    res.status(500).json({ 
+      error: 'Failed to update checklist',
+      details: error.message 
+    })
+  }
+})
+
+// Update comment by los_id and field name
+router.post('/update-comment', async (req, res) => {
+  try {
+    const { losId, fieldName, commentText } = req.body
+    
+    // Convert losId to int
+    const losIdInt = parseInt(losId)
+    
+    if (!losIdInt || !fieldName || !commentText) {
+      return res.status(400).json({ 
+        error: 'losId, fieldName, and commentText are required' 
+      })
+    }
+
+    console.log(`🔄 Backend: Updating comment for LOS ID: ${losIdInt}, Field: ${fieldName}, Comment: ${commentText}`)
+
+    // Call the database function update_comment
+    const result = await db.query(
+      `SELECT update_comment($1, $2, $3)`,
+      [losIdInt, fieldName, commentText]
+    )
+
+    console.log(`✅ Comment updated successfully for LOS ID: ${losIdInt}, Field: ${fieldName}`)
+
+    res.json({
+      success: true,
+      message: `Comment updated for field ${fieldName}`,
+      losId: losIdInt,
+      fieldName: fieldName,
+      commentText: commentText
+    })
+
+  } catch (error) {
+    console.error('❌ Error updating comment:', error.message)
+    res.status(500).json({ 
+      error: 'Failed to update comment',
+      details: error.message 
+    })
+  }
+})
+
+// Get all comments for a specific LOS ID
+router.get('/comments/:losId', async (req, res) => {
+  try {
+    const { losId } = req.params
+    const losIdInt = parseInt(losId)
+
+    if (!losIdInt) {
+      return res.status(400).json({ 
+        error: 'Valid los_id is required' 
+      })
+    }
+
+    console.log(`🔄 Backend: Fetching all comments for LOS ID: ${losIdInt}`)
+
+    // Call the database function fetch_comment_by_los_id
+    const result = await db.query(
+      `SELECT fetch_comment_by_los_id($1)`,
+      [losIdInt]
+    )
+
+    if (!result.rows || result.rows.length === 0) {
+      console.log(`❌ No comments found for LOS ID: ${losIdInt}`)
+      return res.status(404).json({ 
+        error: 'Comments not found',
+        losId: losIdInt
+      })
+    }
+
+    const commentsData = result.rows[0].fetch_comment_by_los_id
+
+    // Transform the comments data into the expected format
+    const allComments = []
+    const departmentMap = {
+      'pb_comments': 'PB',
+      'spu_comments': 'SPU',
+      'cops_comments': 'COPS',
+      'eamvu_comments': 'EAMVU',
+      'ciu_comments': 'CIU',
+      'rru_comments': 'RRU'
+    }
+
+    Object.entries(commentsData).forEach(([fieldName, commentText]) => {
+      if (commentText && commentText.trim() !== '') {
+        allComments.push({
+          field_name: fieldName,
+          comment_text: commentText,
+          department: departmentMap[fieldName] || fieldName.toUpperCase()
+        })
+      }
+    })
+
+    console.log(`✅ Successfully fetched ${allComments.length} comments for LOS ID: ${losIdInt}`)
+
+    res.json({
+      success: true,
+      losId: losIdInt,
+      comments: allComments
+    })
+
+  } catch (error) {
+    console.error('❌ Error fetching comments:', error.message)
+    res.status(500).json({ 
+      error: 'Failed to fetch comments',
+      details: error.message 
+    })
+  }
+})
+
 // Get form data by los_id using database function
 router.get('/form/:losId', async (req, res) => {
   try {
