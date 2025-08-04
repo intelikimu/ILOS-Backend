@@ -2,10 +2,12 @@ const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+require('dotenv').config();
+
 const app = express();
 const PORT = 8081;
 
-const LOCAL_ROOT = "E:/ilos/ilos-backend/ilos_loan_application_documents";
+const LOCAL_ROOT = process.env.LOCAL_ROOT;
 // ====== CORS Middleware ======
 app.use((req, res, next) => {
   // Allow requests from the frontend
