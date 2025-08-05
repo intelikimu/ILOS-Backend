@@ -106,8 +106,8 @@ router.post('/', async (req, res) => {
 
     // Update application status to SPU_PENDING after successful submission
     try {
-      await client.query(`SELECT update_status_by_los_id($1, 'SPU_PENDING')`, [applicationId]);
-      console.log(`✅ Status updated to SPU_PENDING for Classic Credit Card application ${applicationId}`);
+      await client.query(`SELECT update_status_by_los_id($1, 'SUBMITTED_BY_PB')`, [applicationId]);
+              console.log(`✅ Status updated to SUBMITTED_BY_PB for Classic Credit Card application ${applicationId}`);
     } catch (statusError) {
       console.error(`❌ Error updating status for Classic Credit Card application ${applicationId}:`, statusError.message);
       // Don't fail the entire request if status update fails

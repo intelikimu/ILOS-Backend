@@ -7,7 +7,8 @@ require('dotenv').config();
 const app = express();
 const PORT = 8081;
 
-const LOCAL_ROOT = process.env.LOCAL_ROOT;
+const LOCAL_ROOT = "C:/Users/Pc/Desktop/Mudassir/ILOS/ILOS-FullStack/ILOS-backend/ilos_loan_application_documents";
+
 // ====== CORS Middleware ======
 app.use((req, res, next) => {
   // Allow requests from the frontend
@@ -33,6 +34,7 @@ const storage = multer.diskStorage({
         cb(null, tempDir);
     },
     filename: (req, file, cb) => {
+        // Keep original name for temp storage, we'll rename it later
         cb(null, file.originalname);
     }
 });
@@ -47,6 +49,7 @@ app.post("/upload", upload.single("file"), (req, res) => {
     console.log('🔄 Upload server: Received upload request');
     console.log('🔄 Upload server: Request body:', req.body);
     console.log('🔄 Upload server: Request file:', req.file);
+    console.log('🔄 Upload server: Custom name:', req.body.custom_name);
     
     if (!req.file) {
         console.error('❌ Upload server: No file uploaded');
@@ -54,7 +57,7 @@ app.post("/upload", upload.single("file"), (req, res) => {
     }
     
     // Get loanType and losId from the request body (handle both field name formats)
-    const { loanType, losId, loan_type, los_id } = req.body;
+    const { loanType, losId, loan_type, los_id, custom_name, document_type } = req.body;
     
     // Use either format (camelCase or snake_case)
     const finalLoanType = loanType || loan_type;
@@ -75,13 +78,15 @@ app.post("/upload", upload.single("file"), (req, res) => {
     const finalDir = path.join(LOCAL_ROOT, finalLoanType, `los-${finalLosId}`);
     fs.mkdirSync(finalDir, { recursive: true });
     
-    // Move the file from temp to final location
-    const finalPath = path.join(finalDir, req.file.originalname);
+    // Use custom name if provided, otherwise use original filename
+    const finalFilename = custom_name || req.file.originalname;
+    const finalPath = path.join(finalDir, finalFilename);
     fs.renameSync(req.file.path, finalPath);
     
     console.log('✅ Upload server: File uploaded successfully:', {
         originalname: req.file.originalname,
-        filename: req.file.originalname,
+        customName: custom_name,
+        finalFilename: finalFilename,
         path: finalPath,
         size: req.file.size,
         loanType: finalLoanType,
@@ -97,7 +102,8 @@ app.post("/upload", upload.single("file"), (req, res) => {
             success: true,
             message: "File uploaded successfully",
             file: {
-                name: req.file.originalname,
+                name: finalFilename,
+                originalName: req.file.originalname,
                 size: req.file.size,
                 path: finalPath
             },
@@ -120,7 +126,7 @@ app.post("/upload", upload.single("file"), (req, res) => {
             </head>
             <body>
                 <div class="card">
-                    <h3>✅ Uploaded: ${req.file.originalname}</h3>
+                    <h3>✅ Uploaded: ${finalFilename}</h3>
                     <p>Folder: <b>${finalLoanType}/los-${finalLosId}/</b></p>
                     <p>
                         <a href="/pb-upload">Upload Another</a> |

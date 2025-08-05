@@ -27,12 +27,12 @@ const applicationSchema = z.object({
 // Helper function to get status range for each department
 const getStatusRangeForDepartment = (department) => {
   const statusRanges = {
-    'PB': ['PB_SUBMITTED', 'SUBMITTED_TO_COPS', 'SUBMITTED_TO_EAMVU', 'SUBMITTED_TO_CIU', 'SUBMITTED_TO_RRU', 'Application_Accepted', 'Application_Rejected', 'Application_Returned'],
-    'SPU': ['PB_SUBMITTED', 'SUBMITTED_TO_COPS', 'SUBMITTED_TO_EAMVU', 'SUBMITTED_TO_CIU', 'SUBMITTED_TO_RRU'],
-    'COPS': ['SUBMITTED_TO_COPS', 'SUBMITTED_TO_EAMVU', 'SUBMITTED_TO_CIU', 'SUBMITTED_TO_RRU', 'Application_Accepted', 'Application_Rejected', 'Application_Returned'],
-    'EAMVU': ['SUBMITTED_TO_COPS', 'SUBMITTED_TO_EAMVU', 'SUBMITTED_TO_CIU', 'SUBMITTED_TO_RRU', 'Application_Accepted', 'Application_Rejected', 'Application_Returned'],
-    'CIU': ['SUBMITTED_TO_CIU', 'SUBMITTED_TO_RRU', 'Application_Accepted', 'Application_Rejected', 'Application_Returned'],
-    'RRU': ['SUBMITTED_TO_RRU', 'Application_Accepted', 'Application_Rejected', 'Application_Returned']
+    'PB': ['SUBMITTED_BY_PB', 'PB_SUBMITTED', 'SUBMITTED_BY_SPU', 'SUBMITTED_BY_COPS', 'SUBMITTED_BY_EAMVU', 'SUBMITTED_TO_CIU', 'APPLICATION_COMPLETED', 'REJECTED_BY_SPU', 'REJECTED_BY_COPS', 'REJECTED_BY_EAMVU', 'REJECTED_BY_CIU', 'REJECTED_BY_RRU'],
+    'SPU': ['SUBMITTED_BY_PB', 'PB_SUBMITTED'], // SPU only sees applications submitted by PB
+    'COPS': ['SUBMITTED_BY_SPU', 'SUBMITTED_BY_EAMVU'], // COPS sees SPU submissions and EAMVU submissions
+    'EAMVU': ['SUBMITTED_BY_SPU', 'SUBMITTED_BY_COPS'], // EAMVU sees SPU submissions and COPS submissions
+    'CIU': ['SUBMITTED_TO_CIU', 'APPLICATION_COMPLETED', 'REJECTED_BY_CIU'],
+    'RRU': ['REJECTED_BY_SPU', 'REJECTED_BY_COPS', 'REJECTED_BY_EAMVU', 'REJECTED_BY_CIU', 'REJECTED_BY_RRU'] // RRU handles all rejected applications
   }
   
   return statusRanges[department] || []
@@ -475,7 +475,7 @@ router.get('/test/platinum', async (req, res) => {
         'Karachi Main' as branch
       FROM platinum_card_applications 
       ORDER BY created_at DESC 
-      LIMIT 4
+      LIMIT 50
     `);
     
     res.json({
@@ -492,6 +492,73 @@ router.get('/test/platinum', async (req, res) => {
       error: err.message,
       stack: err.stack 
     });
+  }
+});
+
+// Test endpoint to check actual status values in database
+router.get('/test/status-values', async (req, res) => {
+  try {
+    console.log('Testing actual status values in database...');
+    
+    const tables = [
+      'cashplus_applications',
+      'autoloan_applications', 
+      'smeasaan_applications',
+      'commercial_vehicle_applications',
+      'ameendrive_applications',
+      'platinum_card_applications',
+      'creditcard_applications'
+    ];
+
+    const results = {};
+    
+    for (const table of tables) {
+      try {
+        // Check if table exists
+        const tableExists = await db.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = $1
+          );
+        `, [table]);
+        
+        if (!tableExists.rows[0].exists) {
+          results[table] = { error: 'Table does not exist' };
+          continue;
+        }
+        
+        // Get distinct status values
+        const statusValues = await db.query(`
+          SELECT DISTINCT status, COUNT(*) as count
+          FROM ${table}
+          WHERE status IS NOT NULL
+          GROUP BY status
+          ORDER BY status;
+        `);
+        
+        // Get sample records with their status
+        const sampleRecords = await db.query(`
+          SELECT id, status, created_at
+          FROM ${table}
+          ORDER BY created_at DESC
+          LIMIT 5;
+        `);
+        
+        results[table] = {
+          statusValues: statusValues.rows,
+          sampleRecords: sampleRecords.rows,
+          totalRecords: sampleRecords.rows.length
+        };
+        
+      } catch (err) {
+        results[table] = { error: err.message };
+      }
+    }
+
+    res.json(results);
+  } catch (err) {
+    console.error('Error checking status values:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
   
@@ -702,6 +769,140 @@ router.post('/update-status', async (req, res) => {
     console.error('❌ Error updating status:', error.message)
     res.status(500).json({ 
       error: 'Failed to update application status',
+      details: error.message 
+    })
+  }
+})
+
+// Update application status with department approval workflow
+router.post('/update-status-workflow', async (req, res) => {
+  try {
+    const { losId, status, applicationType, department, action } = req.body
+    const losIdInt = parseInt(losId)
+    
+    if (!losIdInt || !status || !applicationType || !department || !action) {
+      return res.status(400).json({ 
+        error: 'losId, status, applicationType, department, and action are required' 
+      })
+    }
+
+    // Map application type to table name
+    const tableMap = {
+      'CashPlus': 'cashplus_applications',
+      'AutoLoan': 'autoloan_applications',
+      'SMEASAAN': 'smeasaan_applications',
+      'CommercialVehicle': 'commercial_vehicle_applications',
+      'AmeenDrive': 'ameendrive_applications',
+      'PlatinumCreditCard': 'platinum_card_applications',
+      'ClassicCreditCard': 'creditcard_applications'
+    }
+
+    const tableName = tableMap[applicationType]
+    if (!tableName) {
+      return res.status(400).json({ 
+        error: 'Invalid application type' 
+      })
+    }
+
+    let finalStatus = status
+    let approvalMessage = `Status updated to ${status}`
+
+    // Handle department-specific workflow
+    if (department === 'PB' && action === 'submit') {
+      finalStatus = 'SUBMITTED_BY_PB'
+      approvalMessage = 'Application submitted by PB to SPU'
+    } else if (department === 'SPU' && action === 'verify') {
+      finalStatus = 'SUBMITTED_BY_SPU'
+      approvalMessage = 'Application verified by SPU - submitted to COPS and EAMVU'
+      console.log(`🔄 SPU: Starting fresh workflow - status set to SUBMITTED_BY_SPU`)
+    } else if (department === 'SPU' && action === 'reject') {
+      finalStatus = 'REJECTED_BY_SPU'
+      approvalMessage = 'Application rejected by SPU'
+    } else if (department === 'COPS' && action === 'approve') {
+      // Check the current status passed from frontend
+      console.log(`🔍 COPS workflow - Current status from frontend: ${status}`)
+      
+      if (status === 'SUBMITTED_BY_SPU' || status === 'PB_SUBMITTED') {
+        // COPS submits first - set to SUBMITTED_BY_COPS
+        finalStatus = 'SUBMITTED_BY_COPS'
+        approvalMessage = 'Application approved by COPS - waiting for EAMVU approval'
+        console.log(`✅ COPS: First approval - setting status to SUBMITTED_BY_COPS`)
+      } else if (status === 'SUBMITTED_BY_EAMVU') {
+        // EAMVU already approved - both done, submit to CIU
+        finalStatus = 'SUBMITTED_TO_CIU'
+        approvalMessage = 'Application approved by COPS - Both COPS and EAMVU approved, submitted to CIU'
+        console.log(`✅ COPS: Second approval after EAMVU - setting status to SUBMITTED_TO_CIU`)
+      } else {
+        // Default case - assume first approval
+        finalStatus = 'SUBMITTED_BY_COPS'
+        approvalMessage = 'Application approved by COPS - waiting for EAMVU approval'
+        console.log(`✅ COPS: Default case - setting status to SUBMITTED_BY_COPS`)
+      }
+    } else if (department === 'COPS' && action === 'reject') {
+      finalStatus = 'REJECTED_BY_COPS'
+      approvalMessage = 'Application rejected by COPS'
+    } else if (department === 'EAMVU' && action === 'approve') {
+      // Check the current status passed from frontend
+      console.log(`🔍 EAMVU workflow - Current status from frontend: ${status}`)
+      
+      if (status === 'SUBMITTED_BY_SPU' || status === 'PB_SUBMITTED') {
+        // EAMVU submits first - set to SUBMITTED_BY_EAMVU
+        finalStatus = 'SUBMITTED_BY_EAMVU'
+        approvalMessage = 'Application approved by EAMVU - waiting for COPS approval'
+        console.log(`✅ EAMVU: First approval - setting status to SUBMITTED_BY_EAMVU`)
+      } else if (status === 'SUBMITTED_BY_COPS') {
+        // COPS already approved - both done, submit to CIU
+        finalStatus = 'SUBMITTED_TO_CIU'
+        approvalMessage = 'Application approved by EAMVU - Both COPS and EAMVU approved, submitted to CIU'
+        console.log(`✅ EAMVU: Second approval after COPS - setting status to SUBMITTED_TO_CIU`)
+      } else {
+        // Default case - assume first approval
+        finalStatus = 'SUBMITTED_BY_EAMVU'
+        approvalMessage = 'Application approved by EAMVU - waiting for COPS approval'
+        console.log(`✅ EAMVU: Default case - setting status to SUBMITTED_BY_EAMVU`)
+      }
+    } else if (department === 'EAMVU' && action === 'reject') {
+      finalStatus = 'REJECTED_BY_EAMVU'
+      approvalMessage = 'Application rejected by EAMVU'
+    } else if (department === 'CIU' && action === 'approve') {
+      finalStatus = 'APPLICATION_COMPLETED'
+      approvalMessage = 'Application completed by CIU'
+    } else if (department === 'CIU' && action === 'reject') {
+      finalStatus = 'REJECTED_BY_CIU'
+      approvalMessage = 'Application rejected by CIU'
+    } else if (department === 'RRU' && action === 'approve') {
+      finalStatus = 'APPLICATION_ACCEPTED'
+      approvalMessage = 'Application accepted by RRU'
+    } else if (department === 'RRU' && action === 'reject') {
+      finalStatus = 'REJECTED_BY_RRU'
+      approvalMessage = 'Application rejected by RRU'
+    }
+
+    console.log(`🔄 Updating status to: ${finalStatus} for LOS ID: ${losIdInt} (${applicationType})`)
+    
+    // Update status in the specific form table
+    const result = await db.query(
+      `select update_status_by_los_id($1, $2)`,
+      [losIdInt, finalStatus]
+    )
+
+    console.log(`📊 Database function result:`, result.rows[0])
+    console.log(`✅ ${approvalMessage} for ${applicationType} application ${losId}`)
+
+    res.json({
+      success: true,
+      message: approvalMessage,
+      losId: losIdInt,
+      status: finalStatus,
+      applicationType: applicationType,
+      department: department,
+      action: action
+    })
+
+  } catch (error) {
+    console.error('❌ Error updating status workflow:', error.message)
+    res.status(500).json({ 
+      error: 'Failed to update application status workflow',
       details: error.message 
     })
   }
@@ -963,20 +1164,20 @@ router.get('/department/:dept', async (req, res) => {
       // SME ASAAN applications
       db.query(`
         SELECT 
-          sa.id,
-          'SMEASAAN' as application_type,
-          COALESCE(sa.applicant_name, 'Unknown Applicant') as applicant_name,
-          'SME Loan' as loan_type,
-          COALESCE(sa.desired_loan_amount, 0) as loan_amount,
-          COALESCE(sa.status, 'PB_SUBMITTED') as status,
-          'high' as priority,
-          sa.created_at,
-          'Islamabad' as branch
-        FROM smeasaan_applications sa
-        ${statusWhereClause}
-        AND sa.created_at IS NOT NULL
-        ORDER BY sa.created_at DESC 
-        LIMIT 50
+        id,
+        'SMEASAAN' as application_type,
+        COALESCE(applicant_name, 'Unknown Applicant') as applicant_name,
+        'SME Loan' as loan_type,
+        COALESCE(desired_loan_amount, 0) as loan_amount,
+        COALESCE(sa.status, 'PB_SUBMITTED') as status,
+        'high' as priority,
+        sa.created_at,
+        'Islamabad' as branch
+      FROM smeasaan_applications sa
+      ${statusWhereClause}
+      AND sa.created_at IS NOT NULL
+      ORDER BY sa.created_at DESC 
+      LIMIT 50
       `, statusParams).catch(() => null),
       
       // Commercial Vehicle applications
