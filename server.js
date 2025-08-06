@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const db = require('./db');
 const bodyParser = require('body-parser');
-const applicationRoutes = require('./routes/applications'); // adjust if in a different path
+// const applicationRoutes = require('./routes/applications'); // Not needed - loaded inline below
 
 
 
@@ -95,7 +95,12 @@ app.get('/api/getNTB_ETB/:cnic', async (req, res) => {
   }
 });
 
-// Routes
+// Test route to verify server works
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'Server test route works!', timestamp: new Date().toISOString() });
+});
+
+// Routes - using minimal version for testing
 app.use('/api/applications', require('./routes/applications'));
 app.use('/api/personal-details', require('./routes/personalDetails'));
 app.use('/api/current-address', require('./routes/currentAddress'));
@@ -117,11 +122,11 @@ app.use('/api/smeasaan', require('./routes/smeasaan'));
 app.use('/api/commercialVehicle', require('./routes/commercialVehicle'));
 app.use('/api/classic_creditcard', require('./routes/classic_creditcard'));
 app.use('/api/platinum_creditcard', require('./routes/platinum_creditcard'));
-app.use('/api/applications', applicationRoutes);
+// Removed duplicate applications route - already mounted above
 
 
 
-// Start the server and bind to 0.0.0.0 for LAN access
+// Start the server and bind to localhost for development
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🟢 Server running at: http://192.168.1.170:${PORT}`);
+  console.log(`🟢 Server running at: http://localhost:${PORT}`);
 });

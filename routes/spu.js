@@ -2,18 +2,18 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db1');
 
-// Get all applications submitted to SPU (from loan_applications table)
+// Get all applications submitted to SPU (from ilos_applications table)
 router.get('/applications', async (req, res) => {
   try {
     // First, let's check if spu_applications table is empty and populate it
     const checkSpu = await db.query('SELECT COUNT(*) FROM spu_applications');
     
     if (parseInt(checkSpu.rows[0].count) === 0) {
-      // Populate SPU applications from loan_applications for testing
+      // Populate SPU applications from ilos_applications for testing
       const loanApps = await db.query(`
-        SELECT id, reference_number, id_no, 
+        SELECT los_id, reference_number, id_no, 
                product_type, desired_financing 
-        FROM loan_applications 
+        FROM ilos_applications 
         LIMIT 10
       `);
       

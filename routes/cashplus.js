@@ -322,10 +322,12 @@ router.post('/', async (req, res) => {
       }
     }
    
-    // Update application status to SPU_PENDING after successful submission
+    // Note: ilos_applications record is automatically created by database trigger
+    
+    // Update application status to PB_SUBMITTED after successful submission
     try {
-      await client.query(`SELECT update_status_by_los_id($1, 'SUBMITTED_BY_PB')`, [applicationId]);
-              console.log(`✅ Status updated to SUBMITTED_BY_PB for application ${applicationId}`);
+      await client.query(`SELECT update_status_by_los_id($1, 'PB_SUBMITTED')`, [applicationId]);
+      console.log(`✅ Status updated to PB_SUBMITTED for application ${applicationId}`);
     } catch (statusError) {
       console.error(`❌ Error updating status for application ${applicationId}:`, statusError.message);
       // Don't fail the entire request if status update fails
