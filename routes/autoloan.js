@@ -8,6 +8,31 @@ const db = require('../db1');
 router.post('/', async (req, res) => {
   const client = await db.connect();
   try {
+    // Map camelCase frontend fields to snake_case database fields
+    const fieldMappings = {
+      firstName: 'first_name',
+      middleName: 'middle_name', 
+      lastName: 'last_name',
+      fatherOrHusbandName: 'father_or_husband_name',
+      mothersMailenName: 'mothers_maiden_name',
+      coBorrowerName: 'co_borrower_name',
+      companyName: 'company_name',
+      prevEmployerName: 'prev_employer_name',
+      // Add more mappings as needed
+    };
+    
+    // Apply field mappings to request body
+    Object.keys(fieldMappings).forEach(camelKey => {
+      const snakeKey = fieldMappings[camelKey];
+      if (req.body[camelKey] !== undefined) {
+        req.body[snakeKey] = req.body[camelKey];
+        // Optionally delete the camelCase version to avoid conflicts
+        delete req.body[camelKey];
+      }
+    });
+    
+    console.log('🔄 AutoLoan: Applied field mappings to request body');
+    
     await client.query('BEGIN');
     // --- Insert main table ---
     const fields = [ // All columns except serial id and created_at

@@ -1,0 +1,16 @@
+{
+  "name": "ilos-dataeng",
+  "version": "1.0.0",
+  "description": "ILOS Data Engine for DBR calculations",
+  "main": "data-engine-server.js",
+  "scripts": {
+    "start": "node data-engine-server.js",
+    "dev": "node data-engine-server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "keywords": ["ilos", "dbr", "calculator"],
+  "author": "ILOS Team",
+  "license": "MIT"
+} 

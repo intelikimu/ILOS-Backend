@@ -36,17 +36,17 @@ async function checkSchema() {
     console.log('\n📋 Sample data from ilos_applications:');
     console.log('=====================================');
     const sampleResult = await db.query(`
-      SELECT los_id, loan_type, status, cops_submitted, eavmu_submitted 
+      SELECT los_id, loan_type, cops_submitted, eavmu_submitted, risk_resolve_comment, compliance_resolve_comment 
       FROM ilos_applications 
       ORDER BY los_id DESC 
       LIMIT 5;
     `);
     
     if (sampleResult.rows.length > 0) {
-      console.log('LOS_ID | LOAN_TYPE | STATUS | COPS_SUBMITTED | EAVMU_SUBMITTED');
-      console.log('-------|-----------|--------|----------------|----------------');
+      console.log('LOS_ID | LOAN_TYPE | COPS_SUBMITTED | EAVMU_SUBMITTED | RISK_COMMENT | COMPLIANCE_COMMENT');
+      console.log('-------|-----------|----------------|----------------|--------------|-------------------');
       sampleResult.rows.forEach(row => {
-        console.log(`${row.los_id} | ${row.loan_type || 'null'} | ${row.status || 'null'} | ${row.cops_submitted || 'null'} | ${row.eavmu_submitted || 'null'}`);
+        console.log(`${row.los_id} | ${row.loan_type || 'null'} | ${row.cops_submitted || 'null'} | ${row.eavmu_submitted || 'null'} | ${row.risk_resolve_comment ? 'Yes' : 'No'} | ${row.compliance_resolve_comment ? 'Yes' : 'No'}`);
       });
     } else {
       console.log('No data found in ilos_applications table');

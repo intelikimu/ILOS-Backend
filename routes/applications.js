@@ -36,12 +36,14 @@ const applicationSchema = z.object({
 const getStatusRangeForDepartment = (department) => {
   const statusRanges = {
     'PB': [ 'PB_SUBMITTED','submitted_by_pb', 'submitted_by_spu', 'assigned_to_eavmu_officer', 'returned_by_eavmu_officer', 'submitted_by_eavmu', 'submitted_by_cops', 'submitted_to_ciu', 'application_completed', 'rejected_by_spu', 'rejected_by_cops', 'rejected_by_eavmu', 'rejected_by_ciu', 'rejected_by_rru'], // PB can see all applications
-    'SPU': ['submitted_by_pb', 'PB_SUBMITTED'], // SPU only sees applications submitted by PB
+    'SPU': ['submitted_by_pb', 'PB_SUBMITTED', 'resolved_by_risk', 'resolved_by_compliance'], // SPU sees applications submitted by PB and resolved by Risk/Compliance
     'COPS': ['submitted_by_spu', 'assigned_to_eavmu_officer', 'returned_by_eavmu_officer', 'submitted_by_eavmu'], // COPS sees SPU submissions, EAMVU assignments, officer returns, and EAMVU final submissions
     'EAMVU': ['submitted_by_spu', 'submitted_by_cops', 'assigned_to_eavmu_officer', 'returned_by_eavmu_officer'], // EAMVU HEAD sees SPU submissions, COPS submissions, assignments, and officer returns
     'EAMVU_OFFICER': ['assigned_to_eavmu_officer'], // EAMVU OFFICER sees applications assigned by EAMVU HEAD
     'CIU': ['submitted_to_ciu', 'application_completed', 'resolved_by_rru'], // CIU sees applications submitted to them and resolved by RRU
-    'RRU': ['rejected_by_spu', 'rejected_by_cops', 'rejected_by_eavmu', 'rejected_by_ciu', 'rejected_by_rru', 'resolved_by_rru','SUBMITTED_TO_RRU'] // RRU handles all rejected applications and resolved applications
+    'RRU': ['rejected_by_spu', 'rejected_by_cops', 'rejected_by_eavmu', 'rejected_by_ciu', 'rejected_by_rru', 'rejected_by_risk', 'rejected_by_compliance', 'resolved_by_rru','SUBMITTED_TO_RRU'], // RRU handles all rejected applications and resolved applications
+    'RISK': ['forwarded_to_risk', 'forwarded_to_risk&compliance'], // Risk department sees applications forwarded to risk (including both risk and compliance)
+    'COMPLIANCE': ['forwarded_to_compliance', 'forwarded_to_risk&compliance'] // Compliance department sees applications forwarded to compliance (including both risk and compliance)
   }
   
   return statusRanges[department] || []
@@ -774,7 +776,7 @@ router.post('/update-status', async (req, res) => {
 // Update application status with department approval workflow
 router.post('/update-status-workflow', async (req, res) => {
   try {
-    const { losId, status, applicationType, department, action } = req.body
+    const { losId, status, applicationType, department, action, resolveComment } = req.body
     const losIdInt = parseInt(losId)
     
     if (!losIdInt || !status || !applicationType || !department || !action) {
@@ -815,6 +817,15 @@ router.post('/update-status-workflow', async (req, res) => {
     } else if (department === 'SPU' && action === 'reject') {
       finalStatus = 'rejected_by_spu'
       approvalMessage = 'Application rejected by SPU'
+    } else if (department === 'SPU' && action === 'forward_to_risk') {
+      finalStatus = 'forwarded_to_risk'
+      approvalMessage = 'Application forwarded to Risk Management'
+    } else if (department === 'SPU' && action === 'forward_to_compliance') {
+      finalStatus = 'forwarded_to_compliance'
+      approvalMessage = 'Application forwarded to Compliance Department'
+    } else if (department === 'SPU' && action === 'forward_to_risk_compliance') {
+      finalStatus = 'forwarded_to_risk&compliance'
+      approvalMessage = 'Application forwarded to Risk Management and Compliance Department'
     } else if (department === 'COPS' && action === 'approve') {
       // Check the current status passed from frontend
       console.log(`🔍 COPS workflow - Current status from frontend: ${status}`)
@@ -1090,6 +1101,74 @@ router.post('/update-status-workflow', async (req, res) => {
     } else if (department === 'RRU' && action === 'reject') {
       finalStatus = 'rejected_by_rru'
       approvalMessage = 'Application rejected by RRU'
+    } else if (department === 'RISK' && action === 'approve') {
+      finalStatus = 'resolved_by_risk'
+      approvalMessage = 'Application approved by Risk Management - sent back to SPU'
+      
+      // Store resolve comment if provided
+      if (resolveComment) {
+        try {
+          await db.query(`
+            UPDATE ilos_applications 
+            SET risk_resolve_comment = $1 
+            WHERE los_id = $2
+          `, [resolveComment, losIdInt]);
+          console.log(`✅ Risk resolve comment stored for LOS ID: ${losIdInt}`)
+        } catch (error) {
+          console.error('❌ Error storing risk resolve comment:', error.message)
+        }
+      }
+    } else if (department === 'RISK' && action === 'reject') {
+      finalStatus = 'rejected_by_risk'
+      approvalMessage = 'Application rejected by Risk Management'
+      
+      // Store reject comment if provided
+      if (resolveComment) {
+        try {
+          await db.query(`
+            UPDATE ilos_applications 
+            SET risk_resolve_comment = $1 
+            WHERE los_id = $2
+          `, [resolveComment, losIdInt]);
+          console.log(`✅ Risk reject comment stored for LOS ID: ${losIdInt}`)
+        } catch (error) {
+          console.error('❌ Error storing risk reject comment:', error.message)
+        }
+      }
+    } else if (department === 'COMPLIANCE' && action === 'approve') {
+      finalStatus = 'resolved_by_compliance'
+      approvalMessage = 'Application approved by Compliance Department - sent back to SPU'
+      
+      // Store resolve comment if provided
+      if (resolveComment) {
+        try {
+          await db.query(`
+            UPDATE ilos_applications 
+            SET compliance_resolve_comment = $1 
+            WHERE los_id = $2
+          `, [resolveComment, losIdInt]);
+          console.log(`✅ Compliance resolve comment stored for LOS ID: ${losIdInt}`)
+        } catch (error) {
+          console.error('❌ Error storing compliance resolve comment:', error.message)
+        }
+      }
+    } else if (department === 'COMPLIANCE' && action === 'reject') {
+      finalStatus = 'rejected_by_compliance'
+      approvalMessage = 'Application rejected by Compliance Department'
+      
+      // Store reject comment if provided
+      if (resolveComment) {
+        try {
+          await db.query(`
+            UPDATE ilos_applications 
+            SET compliance_resolve_comment = $1 
+            WHERE los_id = $2
+          `, [resolveComment, losIdInt]);
+          console.log(`✅ Compliance reject comment stored for LOS ID: ${losIdInt}`)
+        } catch (error) {
+          console.error('❌ Error storing compliance reject comment:', error.message)
+        }
+      }
     }
 
     console.log(`🔄 Updating status to: ${finalStatus} for LOS ID: ${losIdInt} (${applicationType})`)
@@ -1204,6 +1283,85 @@ router.post('/update-comment', async (req, res) => {
   }
 })
 
+// Update SPU checklist by los_id
+router.post('/update-spu-checklist', async (req, res) => {
+  try {
+    const { losId, checkType, isChecked, comment } = req.body
+    
+    // Convert losId to int
+    const losIdInt = parseInt(losId)
+    
+    if (!losIdInt || !checkType || typeof isChecked !== 'boolean') {
+      return res.status(400).json({ 
+        error: 'losId, checkType, and isChecked (boolean) are required' 
+      })
+    }
+
+    console.log(`🔄 Backend: Updating SPU checklist for LOS ID: ${losIdInt}, Check: ${checkType}, Checked: ${isChecked}`)
+
+    // Call the database function update_spu_checklist
+    const result = await db.query(
+      `SELECT update_spu_checklist($1, $2, $3, $4)`,
+      [losIdInt, checkType, isChecked, comment || null]
+    )
+
+    console.log(`✅ SPU checklist updated successfully for LOS ID: ${losIdInt}, Check: ${checkType}`)
+
+    res.json({
+      success: true,
+      message: `SPU checklist ${checkType} updated`,
+      losId: losIdInt,
+      checkType: checkType,
+      isChecked: isChecked,
+      comment: comment
+    })
+
+  } catch (error) {
+    console.error('❌ Error updating SPU checklist:', error.message)
+    res.status(500).json({ 
+      error: 'Failed to update SPU checklist',
+      details: error.message 
+    })
+  }
+})
+
+// Get SPU checklist for a specific LOS ID
+router.get('/spu-checklist/:losId', async (req, res) => {
+  try {
+    const { losId } = req.params
+    const losIdInt = parseInt(losId)
+
+    if (!losIdInt) {
+      return res.status(400).json({ 
+        error: 'Valid los_id is required' 
+      })
+    }
+
+    console.log(`🔄 Backend: Fetching SPU checklist for LOS ID: ${losIdInt}`)
+
+    // Call the database function get_spu_checklist
+    const result = await db.query(
+      `SELECT * FROM get_spu_checklist($1)`,
+      [losIdInt]
+    )
+
+    console.log(`✅ Successfully fetched SPU checklist for LOS ID: ${losIdInt}`)
+
+    res.json({
+      success: true,
+      losId: losIdInt,
+      checklist: result.rows
+    })
+
+  } catch (error) {
+    console.error('❌ Error fetching SPU checklist:', error.message)
+    res.status(500).json({ 
+      error: 'Failed to fetch SPU checklist',
+      details: error.message 
+    })
+  }
+})
+
 // Get all comments for a specific LOS ID
 router.get('/comments/:losId', async (req, res) => {
   try {
@@ -1272,51 +1430,160 @@ router.get('/comments/:losId', async (req, res) => {
   }
 })
 
-// Get form data by los_id using database function
+// Get form data by los_id with complete details (updated to match /:id endpoint logic)
 router.get('/form/:losId', async (req, res) => {
   try {
-    const { losId } = req.params
-    const losIdInt = parseInt(losId)
-
+    const losIdInt = parseInt(req.params.losId);
+    
     if (!losIdInt) {
       return res.status(400).json({ 
         error: 'Valid los_id is required' 
-      })
+      });
     }
 
-    console.log(`🔄 Backend: Fetching form data for LOS ID: ${losIdInt}`)
+    console.log(`🔄 Backend: Fetching form data for LOS ID: ${losIdInt}`);
 
-    // Call the database function get_form_by_los_id
-    const result = await db.query(
-      `SELECT get_form_by_los_id($1)`,
-      [losIdInt]
-    )
-
-    if (!result.rows || result.rows.length === 0) {
-      console.log(`❌ No form data found for LOS ID: ${losIdInt}`)
-      return res.status(404).json({ 
-        error: 'Form data not found',
-        losId: losIdInt
-      })
+    // First get the application metadata to determine the loan type
+    const metaResult = await db.query('SELECT * FROM ilos_applications WHERE los_id = $1', [losIdInt]);
+    if (metaResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Application not found' });
     }
+    
+    const metadata = metaResult.rows[0];
+    const loanType = metadata.loan_type;
+    
+    let applicationData = null;
+    
+    // Query the specific application table based on loan type
+    switch (loanType) {
+      case 'ameendrive_applications':
+        const ameendriveResult = await db.query(`
+          SELECT 
+            ad.*,
+            COALESCE(ad.applicant_full_name, 'Unknown Applicant') as full_name
+          FROM ameendrive_applications ad 
+          WHERE ad.id = $1
+        `, [losIdInt]);
+        applicationData = ameendriveResult.rows[0];
+        if (applicationData) {
+          // Map AmeenDrive specific fields to common field names
+          applicationData.first_name = applicationData.applicant_full_name?.split(' ')[0] || '';
+          applicationData.last_name = applicationData.applicant_full_name?.split(' ').slice(1).join(' ') || '';
+          applicationData.father_or_husband_name = applicationData.father_husband_name;
+        }
+        break;
+        
+      case 'cashplus_applications':
+        const cashplusResult = await db.query(`
+          SELECT 
+            ca.*,
+            COALESCE(CONCAT(ca.first_name, ' ', ca.last_name), 'Unknown Applicant') as full_name
+          FROM cashplus_applications ca 
+          WHERE ca.id = $1
+        `, [losIdInt]);
+        applicationData = cashplusResult.rows[0];
+        break;
+        
+      case 'autoloan_applications':
+        const autoloanResult = await db.query(`
+          SELECT 
+            al.*,
+            COALESCE(CONCAT(al.first_name, ' ', al.last_name), 'Unknown Applicant') as full_name
+          FROM autoloan_applications al 
+          WHERE al.id = $1
+        `, [losIdInt]);
+        applicationData = autoloanResult.rows[0];
+        break;
+        
+      case 'smeasaan_applications':
+        const smeasaanResult = await db.query(`
+          SELECT 
+            sa.*,
+            COALESCE(sa.applicant_name, 'Unknown Applicant') as full_name
+          FROM smeasaan_applications sa 
+          WHERE sa.id = $1
+        `, [losIdInt]);
+        applicationData = smeasaanResult.rows[0];
+        if (applicationData) {
+          // Map SME specific fields
+          applicationData.first_name = applicationData.applicant_name?.split(' ')[0] || '';
+          applicationData.last_name = applicationData.applicant_name?.split(' ').slice(1).join(' ') || '';
+        }
+        break;
+        
+      case 'creditcard_applications':
+        const creditcardResult = await db.query(`
+          SELECT 
+            cc.*,
+            COALESCE(cc.full_name, 'Unknown Applicant') as full_name
+          FROM creditcard_applications cc 
+          WHERE cc.id = $1
+        `, [losIdInt]);
+        applicationData = creditcardResult.rows[0];
+        if (applicationData) {
+          applicationData.first_name = applicationData.full_name?.split(' ')[0] || '';
+          applicationData.last_name = applicationData.full_name?.split(' ').slice(1).join(' ') || '';
+        }
+        break;
+        
+      case 'platinum_card_applications':
+        const platinumResult = await db.query(`
+          SELECT 
+            pc.*,
+            COALESCE(CONCAT(pc.first_name, ' ', pc.last_name), 'Unknown Applicant') as full_name
+          FROM platinum_card_applications pc 
+          WHERE pc.id = $1
+        `, [losIdInt]);
+        applicationData = platinumResult.rows[0];
+        break;
+        
+      case 'commercialvehicle_applications':
+        const commercialResult = await db.query(`
+          SELECT 
+            cv.*,
+            COALESCE(cv.applicant_name, 'Unknown Applicant') as full_name
+          FROM commercialvehicle_applications cv 
+          WHERE cv.id = $1
+        `, [losIdInt]);
+        applicationData = commercialResult.rows[0];
+        if (applicationData) {
+          applicationData.first_name = applicationData.applicant_name?.split(' ')[0] || '';
+          applicationData.last_name = applicationData.applicant_name?.split(' ').slice(1).join(' ') || '';
+        }
+        break;
+        
+      default:
+        return res.status(400).json({ message: `Unknown loan type: ${loanType}` });
+    }
+    
+    if (!applicationData) {
+      return res.status(404).json({ error: 'Application details not found' });
+    }
+    
+    // Combine metadata and application data
+    const completeFormData = {
+      ...metadata,
+      ...applicationData,
+      los_id: losIdInt, // Ensure los_id is preserved
+      // Add CNIC field for consistency
+      cnic: applicationData.cnic || applicationData.applicant_cnic || applicationData.nic || applicationData.nic_or_passport || null
+    };
 
-    const formData = result.rows[0].get_form_by_los_id
-
-    console.log(`✅ Successfully fetched form data for LOS ID: ${losIdInt}`)
-    console.log(`📋 Form data:`, formData)
+    console.log(`✅ Successfully fetched form data for LOS ID: ${losIdInt}`);
+    console.log(`📋 Name fields: first_name=${completeFormData.first_name}, last_name=${completeFormData.last_name}, full_name=${completeFormData.full_name}`);
 
     res.json({
       success: true,
       losId: losIdInt,
-      formData: formData
-    })
+      formData: completeFormData
+    });
 
   } catch (error) {
-    console.error('❌ Error fetching form data:', error.message)
+    console.error('❌ Error fetching form data:', error.message);
     res.status(500).json({ 
       error: 'Failed to fetch form data',
       details: error.message 
-    })
+    });
   }
 })
 
@@ -1334,6 +1601,8 @@ router.get('/department/:dept', async (req, res) => {
       console.log('📊 PB has access to ALL applications')
     }
     
+
+    
     // Get applications accessible to the department from all application types
     const queries = [
       // CashPlus applications
@@ -1347,7 +1616,10 @@ router.get('/department/:dept', async (req, res) => {
           COALESCE(ca.status, 'submitted_by_pb') as status,
           'medium' as priority,
           ca.created_at,
-          'Karachi Main' as branch
+          'Karachi Main' as branch,
+          ia.risk_resolve_comment,
+          ia.compliance_resolve_comment,
+          ca.cnic
         FROM cashplus_applications ca
         LEFT JOIN ilos_applications ia ON ia.loan_type = 'cashplus_applications' AND ia.id = ca.id
         ${buildStatusWhereClause(department, 'ca')}
@@ -1363,13 +1635,27 @@ router.get('/department/:dept', async (req, res) => {
         SELECT 
           al.id,
           'AutoLoan' as application_type,
-          COALESCE(CONCAT(al.first_name, ' ', al.last_name), 'Unknown Applicant') as applicant_name,
+          COALESCE(
+            CASE 
+              WHEN al.first_name IS NOT NULL AND al.last_name IS NOT NULL 
+              THEN CONCAT(al.first_name, ' ', al.last_name)
+              WHEN al.first_name IS NOT NULL 
+              THEN al.first_name
+              WHEN al.last_name IS NOT NULL 
+              THEN al.last_name
+              ELSE 'Unknown Applicant'
+            END, 
+            'Unknown Applicant'
+          ) as applicant_name,
           'Auto Loan' as loan_type,
           COALESCE(al.price_value, 0) as loan_amount,
           COALESCE(al.status, 'submitted_by_pb') as status,
           'medium' as priority,
           al.created_at,
-          'Lahore Main' as branch
+          'Lahore Main' as branch,
+          ia.risk_resolve_comment,
+          ia.compliance_resolve_comment,
+          al.applicant_cnic as cnic
         FROM autoloan_applications al
         LEFT JOIN ilos_applications ia ON ia.loan_type = 'autoloan_applications' AND ia.id = al.id
         ${buildStatusWhereClause(department, 'al')}
@@ -1391,7 +1677,10 @@ router.get('/department/:dept', async (req, res) => {
         COALESCE(sa.status, 'submitted_by_pb') as status,
         'high' as priority,
         sa.created_at,
-        'Islamabad' as branch
+        'Islamabad' as branch,
+        ia.risk_resolve_comment,
+        ia.compliance_resolve_comment,
+        sa.applicant_cnic as cnic
       FROM smeasaan_applications sa
       LEFT JOIN ilos_applications ia ON ia.loan_type = 'smeasaan' AND ia.id = sa.id
       ${buildStatusWhereClause(department, 'sa')}
@@ -1413,7 +1702,10 @@ router.get('/department/:dept', async (req, res) => {
           COALESCE(cv.status, 'submitted_by_pb') as status,
           'high' as priority,
           cv.created_at,
-          'Karachi Main' as branch
+          'Karachi Main' as branch,
+          ia.risk_resolve_comment,
+          ia.compliance_resolve_comment,
+          cv.applicant_cnic as cnic
         FROM commercial_vehicle_applications cv
         LEFT JOIN ilos_applications ia ON ia.loan_type = 'commercial_vehicle' AND ia.id = cv.id
         ${buildStatusWhereClause(department, 'cv')}
@@ -1435,7 +1727,10 @@ router.get('/department/:dept', async (req, res) => {
           COALESCE(ad.status, 'submitted_by_pb') as status,
           'medium' as priority,
           ad.created_at,
-          'Lahore Main' as branch
+          'Lahore Main' as branch,
+          ia.risk_resolve_comment,
+          ia.compliance_resolve_comment,
+          ad.applicant_cnic as cnic
         FROM ameendrive_applications ad
         LEFT JOIN ilos_applications ia ON ia.loan_type = 'ameendrive' AND ia.id = ad.id
         ${buildStatusWhereClause(department, 'ad')}
@@ -1457,7 +1752,10 @@ router.get('/department/:dept', async (req, res) => {
           COALESCE(pc.status, 'submitted_by_pb') as status,
           'low' as priority,
           pc.created_at,
-          'Karachi Main' as branch
+          'Karachi Main' as branch,
+          ia.risk_resolve_comment,
+          ia.compliance_resolve_comment,
+          pc.nic as cnic
         FROM platinum_card_applications pc
         LEFT JOIN ilos_applications ia ON ia.loan_type = 'platinum_card' AND ia.id = pc.id
         ${buildStatusWhereClause(department, 'pc')}
@@ -1479,7 +1777,10 @@ router.get('/department/:dept', async (req, res) => {
           COALESCE(cc.status, 'submitted_by_pb') as status,
           'low' as priority,
           cc.created_at,
-          'Islamabad' as branch
+          'Islamabad' as branch,
+          ia.risk_resolve_comment,
+          ia.compliance_resolve_comment,
+          cc.nic_or_passport as cnic
         FROM creditcard_applications cc
         LEFT JOIN ilos_applications ia ON ia.loan_type = 'creditcard' AND ia.id = cc.id
         ${buildStatusWhereClause(department, 'cc')}
@@ -1948,14 +2249,126 @@ router.get('/agents/:agentId/workload', async (req, res) => {
 });
 
 // MOVED: Generic /:id route after specific routes to avoid conflicts
-// GET one application by ID
+// GET one application by ID with complete details
 router.get('/:id', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM ilos_applications WHERE los_id = $1', [req.params.id]);
-    if (result.rows.length === 0) {
+    const losId = parseInt(req.params.id);
+    
+    // First get the application metadata to determine the loan type
+    const metaResult = await db.query('SELECT * FROM ilos_applications WHERE los_id = $1', [losId]);
+    if (metaResult.rows.length === 0) {
       return res.status(404).json({ message: 'Application not found' });
     }
-    res.json(result.rows[0]);
+    
+    const metadata = metaResult.rows[0];
+    const loanType = metadata.loan_type;
+    
+    let applicationData = null;
+    
+    // Query the specific application table based on loan type
+    switch (loanType) {
+      case 'ameendrive_applications':
+        const ameendriveResult = await db.query(`
+          SELECT 
+            ad.*,
+            COALESCE(ad.applicant_full_name, 'Unknown Applicant') as full_name,
+            'AmeenDrive Loan' as loan_type_display
+          FROM ameendrive_applications ad 
+          WHERE ad.id = $1
+        `, [losId]);
+        applicationData = ameendriveResult.rows[0];
+        break;
+        
+      case 'cashplus_applications':
+        const cashplusResult = await db.query(`
+          SELECT 
+            ca.*,
+            COALESCE(CONCAT(ca.first_name, ' ', ca.last_name), 'Unknown Applicant') as full_name,
+            'CashPlus Loan' as loan_type_display
+          FROM cashplus_applications ca 
+          WHERE ca.id = $1
+        `, [losId]);
+        applicationData = cashplusResult.rows[0];
+        break;
+        
+      case 'autoloan_applications':
+        const autoloanResult = await db.query(`
+          SELECT 
+            al.*,
+            COALESCE(CONCAT(al.first_name, ' ', al.last_name), 'Unknown Applicant') as full_name,
+            'Auto Loan' as loan_type_display
+          FROM autoloan_applications al 
+          WHERE al.id = $1
+        `, [losId]);
+        applicationData = autoloanResult.rows[0];
+        break;
+        
+      case 'smeasaan_applications':
+        const smeasaanResult = await db.query(`
+          SELECT 
+            sa.*,
+            COALESCE(sa.applicant_name, 'Unknown Applicant') as full_name,
+            'SME Loan' as loan_type_display
+          FROM smeasaan_applications sa 
+          WHERE sa.id = $1
+        `, [losId]);
+        applicationData = smeasaanResult.rows[0];
+        break;
+        
+      case 'creditcard_applications':
+        const creditcardResult = await db.query(`
+          SELECT 
+            cc.*,
+            COALESCE(cc.full_name, 'Unknown Applicant') as full_name,
+            'Credit Card' as loan_type_display
+          FROM creditcard_applications cc 
+          WHERE cc.id = $1
+        `, [losId]);
+        applicationData = creditcardResult.rows[0];
+        break;
+        
+      case 'platinum_card_applications':
+        const platinumResult = await db.query(`
+          SELECT 
+            pc.*,
+            COALESCE(CONCAT(pc.first_name, ' ', pc.last_name), 'Unknown Applicant') as full_name,
+            'Platinum Card' as loan_type_display
+          FROM platinum_card_applications pc 
+          WHERE pc.id = $1
+        `, [losId]);
+        applicationData = platinumResult.rows[0];
+        break;
+        
+      case 'commercialvehicle_applications':
+        const commercialResult = await db.query(`
+          SELECT 
+            cv.*,
+            COALESCE(cv.applicant_name, 'Unknown Applicant') as full_name,
+            'Commercial Vehicle Loan' as loan_type_display
+          FROM commercialvehicle_applications cv 
+          WHERE cv.id = $1
+        `, [losId]);
+        applicationData = commercialResult.rows[0];
+        break;
+        
+      default:
+        return res.status(400).json({ message: `Unknown loan type: ${loanType}` });
+    }
+    
+    if (!applicationData) {
+      return res.status(404).json({ message: 'Application details not found' });
+    }
+    
+    // Combine metadata and application data
+    const completeApplication = {
+      ...metadata,
+      ...applicationData,
+      los_id: losId, // Ensure los_id is preserved
+      // Add CNIC field for consistency
+      cnic: applicationData.cnic || applicationData.applicant_cnic || applicationData.nic || applicationData.nic_or_passport || null
+    };
+    
+    res.json(completeApplication);
   } catch (err) {
     console.error('Error fetching application:', err.message);
     res.status(500).json({ error: 'Internal Server Error' });

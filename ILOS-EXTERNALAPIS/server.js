@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const db = require('./db');
 const bodyParser = require('body-parser');
-// const applicationRoutes = require('./routes/applications'); // Not needed - loaded inline below
+const applicationRoutes = require('./routes/applications'); // adjust if in a different path
 
 
 
@@ -95,12 +95,7 @@ app.get('/api/getNTB_ETB/:cnic', async (req, res) => {
   }
 });
 
-// Test route to verify server works
-app.get('/api/test', (req, res) => {
-  res.json({ message: 'Server test route works!', timestamp: new Date().toISOString() });
-});
-
-// Routes - using minimal version for testing
+// Routes
 app.use('/api/applications', require('./routes/applications'));
 app.use('/api/personal-details', require('./routes/personalDetails'));
 app.use('/api/current-address', require('./routes/currentAddress'));
@@ -112,19 +107,16 @@ app.use('/api/insurance-details', require('./routes/insuranceDetails'));
 app.use('/api/contact-details', require('./routes/contactDetails'));
 app.use('/api/verification', require('./routes/verification'));
 app.use('/api/spu-officer', require('./routes/spuOfficer'));
-app.use('/api/spu', require('./routes/spu'));
-app.use('/api/cif', require('./routes/cif'));
-app.use('/cif', require('./routes/cif'));
-app.use('/api/cashplus', require('./routes/cashplus'));
-app.use('/api/autoloan', require('./routes/autoloan'));
-app.use('/api/ameendrive', require('./routes/ameendrive'));
-app.use('/api/smeasaan', require('./routes/smeasaan'));
-app.use('/api/commercialVehicle', require('./routes/commercialVehicle'));
-app.use('/api/classic_creditcard', require('./routes/classic_creditcard'));
+app.use('/api/spu',                 require('./routes/spu'));
+app.use('/api/cif',                 require('./routes/cif'));
+app.use('/cif',                     require('./routes/cif'));
+app.use('/api/cashplus',            require('./routes/cashplus'));
+app.use('/api/autoloan',            require('./routes/autoloan'));
+app.use('/api/ameendrive',          require('./routes/ameendrive'));
+app.use('/api/smeasaan',            require('./routes/smeasaan'));
+app.use('/api/commercialVehicle',   require('./routes/commercialVehicle'));
+app.use('/api/classic_creditcard',  require('./routes/classic_creditcard'));
 app.use('/api/platinum_creditcard', require('./routes/platinum_creditcard'));
-// Removed duplicate applications route - already mounted above
-
-//EXTERNAL APIs
 
 app.use('/api/sbp-blacklist',       require('./routes/sbp_blacklist'));
 app.use('/api/pep',                 require('./routes/pep'));
@@ -134,9 +126,15 @@ app.use('/api/frms',                require('./routes/frms'));
 app.use('/api/consumer-companies',  require('./routes/consumer_companies_list'));
 app.use('/api/ecib-reports',        require('./routes/ecib_reports'));
 app.use('/api',                     require('./routes/combinechecks'));
-app.use('/api/ccl',        require('./routes/consumer_companies_list'));
 
-// Start the server and bind to localhost for development
+
+
+
+app.use('/api/applications', applicationRoutes);
+
+
+
+// Start the server and bind to 0.0.0.0 for LAN access
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🟢 Server running at: http://localhost:${PORT}`);
+  console.log(`🟢 Server running at: http://192.168.1.170:${PORT}`);
 });

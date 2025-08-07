@@ -431,6 +431,204 @@ app.get("/api/documents/search/:losId", (req, res) => {
     });
 });
 
+// ====== Document Metadata Storage ======
+// This will help with better document matching
+const documentMetadata = new Map()
+
+// ====== Enhanced Upload API with Metadata ======
+app.post("/upload-with-metadata", upload.single("file"), (req, res) => {
+    console.log('🔄 Enhanced Upload server: Received upload request')
+    console.log('🔄 Enhanced Upload server: Request body:', req.body)
+    console.log('🔄 Enhanced Upload server: Request file:', req.file)
+    
+    if (!req.file) {
+        console.error('❌ Enhanced Upload server: No file uploaded')
+        return res.status(400).json({ error: "No file uploaded." })
+    }
+    
+    const { loanType, losId, loan_type, los_id, custom_name, document_type, document_category } = req.body
+    
+    const finalLoanType = loanType || loan_type
+    const finalLosId = losId || los_id
+    const finalDocumentType = document_type || 'Unknown'
+    const finalDocumentCategory = document_category || 'General'
+    
+    if (!finalLoanType || !finalLosId) {
+        console.error('❌ Enhanced Upload server: Missing required fields')
+        fs.unlinkSync(req.file.path)
+        return res.status(400).json({ 
+            error: "loanType/loan_type and losId/los_id are required",
+            received: req.body 
+        })
+    }
+    
+    // Create the final destination directory
+    const finalDir = path.join(LOCAL_ROOT, finalLoanType, `los-${finalLosId}`)
+    fs.mkdirSync(finalDir, { recursive: true })
+    
+    // Use custom name if provided, otherwise use original filename
+    const finalFilename = custom_name || req.file.originalname
+    const finalPath = path.join(finalDir, finalFilename)
+    fs.renameSync(req.file.path, finalPath)
+    
+    // Store metadata for better document matching
+    const metadataKey = `${finalLoanType}-${finalLosId}-${finalFilename}`
+    documentMetadata.set(metadataKey, {
+        originalName: req.file.originalname,
+        documentType: finalDocumentType,
+        documentCategory: finalDocumentCategory,
+        uploadTime: new Date().toISOString(),
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype
+    })
+    
+    console.log('✅ Enhanced Upload server: File uploaded successfully:', {
+        originalname: req.file.originalname,
+        customName: custom_name,
+        finalFilename: finalFilename,
+        path: finalPath,
+        size: req.file.size,
+        loanType: finalLoanType,
+        losId: finalLosId,
+        documentType: finalDocumentType,
+        documentCategory: finalDocumentCategory
+    })
+    
+    res.json({
+        success: true,
+        message: "File uploaded successfully with metadata",
+        file: {
+            name: finalFilename,
+            originalName: req.file.originalname,
+            size: req.file.size,
+            path: finalPath,
+            documentType: finalDocumentType,
+            documentCategory: finalDocumentCategory
+        },
+        folder: `${finalLoanType}/los-${finalLosId}/`
+    })
+})
+
+// ====== Enhanced Document Search API ======
+app.get("/api/documents/enhanced/:losId", (req, res) => {
+    const { losId } = req.params
+    const { applicationType, documentType } = req.query
+    
+    console.log(`🔍 Enhanced Document Search: LOS-${losId}, Type: ${applicationType}, DocType: ${documentType}`)
+    
+    if (!losId) {
+        return res.status(400).json({ error: "LOS ID is required" })
+    }
+    
+    // Determine the application type path
+    let appTypePath = 'temp'
+    if (applicationType) {
+        switch (applicationType.toLowerCase()) {
+            case 'cashplus':
+                appTypePath = 'cashplus'
+                break
+            case 'autoloan':
+                appTypePath = 'AutoLoan'
+                break
+            case 'smeasaan':
+                appTypePath = 'smeasaan'
+                break
+            case 'commercialvehicle':
+                appTypePath = 'commercialVehicle'
+                break
+            case 'ameendrive':
+                appTypePath = 'ameendrive'
+                break
+            case 'platinumcreditcard':
+            case 'classiccreditcard':
+                appTypePath = 'creditcard'
+                break
+            default:
+                appTypePath = 'temp'
+        }
+    }
+    
+    const losFolderPath = path.join(LOCAL_ROOT, appTypePath, `los-${losId}`)
+    console.log(`🔍 Looking for documents in: ${losFolderPath}`)
+    
+    fs.stat(losFolderPath, (err, stats) => {
+        if (err || !stats || !stats.isDirectory()) {
+            console.log(`❌ LOS folder not found: ${losFolderPath}`)
+            return res.json({
+                losId: `LOS-${losId}`,
+                applicationType: applicationType,
+                exists: false,
+                documents: [],
+                message: `No documents found for LOS-${losId}`
+            })
+        }
+        
+        fs.readdir(losFolderPath, { withFileTypes: true }, (err, files) => {
+            if (err) {
+                console.error(`❌ Error reading LOS folder: ${err.message}`)
+                return res.status(500).json({ 
+                    error: "Could not read documents folder",
+                    details: err.message 
+                })
+            }
+            
+            const documents = files
+                .filter(file => !file.name.startsWith('.'))
+                .map(file => {
+                    const filePath = path.join(losFolderPath, file.name)
+                    const stats = fs.statSync(filePath)
+                    
+                    // Get metadata if available
+                    const metadataKey = `${appTypePath}-${losId}-${file.name}`
+                    const metadata = documentMetadata.get(metadataKey) || {}
+                    
+                    return {
+                        name: file.name,
+                        type: file.isDirectory() ? 'folder' : 'file',
+                        size: stats.size,
+                        modified: stats.mtime,
+                        path: `/explorer/${appTypePath}/los-${losId}/${encodeURIComponent(file.name)}`,
+                        downloadUrl: file.isDirectory() ? null : `/explorer/${appTypePath}/los-${losId}/${encodeURIComponent(file.name)}`,
+                        documentType: metadata.documentType || 'Unknown',
+                        documentCategory: metadata.documentCategory || 'General',
+                        originalName: metadata.originalName || file.name,
+                        uploadTime: metadata.uploadTime || stats.mtime.toISOString()
+                    }
+                })
+                .sort((a, b) => {
+                    if (a.type === 'folder' && b.type !== 'folder') return -1
+                    if (a.type !== 'folder' && b.type === 'folder') return 1
+                    return a.name.localeCompare(b.name)
+                })
+            
+            // Filter by document type if specified
+            let filteredDocuments = documents
+            if (documentType) {
+                filteredDocuments = documents.filter(doc => 
+                    doc.documentType.toLowerCase().includes(documentType.toLowerCase()) ||
+                    doc.name.toLowerCase().includes(documentType.toLowerCase())
+                )
+            }
+            
+            console.log(`✅ Found ${filteredDocuments.length} documents for LOS-${losId}`)
+            
+            res.json({
+                losId: `LOS-${losId}`,
+                applicationType: applicationType,
+                exists: true,
+                documents: filteredDocuments,
+                folderPath: `${appTypePath}/los-${losId}`,
+                message: `Found ${filteredDocuments.length} documents for LOS-${losId}`,
+                metadata: {
+                    totalFiles: documents.length,
+                    filteredFiles: filteredDocuments.length,
+                    documentTypes: [...new Set(documents.map(d => d.documentType))]
+                }
+            })
+        })
+    })
+})
+
 function explorerHandler(req, res) {
     // Normalize path
     let reqPath = decodeURIComponent(req.path.replace(/^\/explorer/, "")) || "/";
@@ -584,7 +782,7 @@ function explorerHandler(req, res) {
                         return `<tr>
                           <td><span class="icon">&#128196;</span>${f.name}</td>
                           <td>File</td>
-                          <td><a href="/explorer${encodeURI(fileUrl)}" download>Download</a></td>
+                          <td><a href="/explorer${encodeURI(fileUrl)}" target="_blank">View</a> | <a href="/explorer${encodeURI(fileUrl)}?download" download>Download</a></td>
                         </tr>`;
                       }
                     }).join("")}
@@ -612,7 +810,17 @@ function explorerHandler(req, res) {
             
             console.log(`📁 Serving file: ${fileName} (${mimeType}) from ${fsPath}`);
             
-            res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+            // Check if this is a view request (no download parameter)
+            const isViewRequest = !req.query.download;
+            console.log(`📁 Request type: ${isViewRequest ? 'VIEW' : 'DOWNLOAD'}`);
+            
+            if (isViewRequest) {
+                // For viewing, set inline disposition
+                res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+            } else {
+                // For downloading, set attachment disposition
+                res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+            }
             res.setHeader('Content-Type', mimeType);
             res.sendFile(fsPath, (err) => {
                 if (err) {
