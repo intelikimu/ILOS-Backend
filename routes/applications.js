@@ -41,7 +41,7 @@ const getStatusRangeForDepartment = (department) => {
     'EAMVU': ['submitted_by_spu', 'submitted_by_cops', 'assigned_to_eavmu_officer', 'returned_by_eavmu_officer'], // EAMVU HEAD sees SPU submissions, COPS submissions, assignments, and officer returns
     'EAMVU_OFFICER': ['assigned_to_eavmu_officer'], // EAMVU OFFICER sees applications assigned by EAMVU HEAD
     'CIU': ['submitted_to_ciu', 'application_completed', 'resolved_by_rru'], // CIU sees applications submitted to them and resolved by RRU
-    'RRU': ['rejected_by_spu', 'rejected_by_cops', 'rejected_by_eavmu', 'rejected_by_ciu', 'rejected_by_rru', 'resolved_by_rru'] // RRU handles all rejected applications and resolved applications
+    'RRU': ['rejected_by_spu', 'rejected_by_cops', 'rejected_by_eavmu', 'rejected_by_ciu', 'rejected_by_rru', 'resolved_by_rru','SUBMITTED_TO_RRU'] // RRU handles all rejected applications and resolved applications
   }
   
   return statusRanges[department] || []
@@ -1571,103 +1571,291 @@ router.get('/department/EAMVU_OFFICER/:agentId', async (req, res) => {
     const { agentId } = req.params;
     console.log(`🔄 Backend: Fetching applications for agent ${agentId}...`);
     
-    // Get all active assignments for this agent
-    const query = `
+    // Get active assignments for this specific agent
+    const assignments = await db.query(`
       SELECT 
         aa.los_id,
+        aa.agent_id,
         aa.assigned_at,
         aa.assignment_notes,
-        aa.status as assignment_status,
-        ia.loan_type as application_type,
-        ia.id,
-        -- Get applicant details from appropriate table
-        CASE 
-          WHEN ia.loan_type = 'cashplus_applications' THEN (
-            SELECT CONCAT(ca.first_name, ' ', ca.last_name) 
-            FROM cashplus_applications ca WHERE ca.id = ia.id
-          )
-          WHEN ia.loan_type = 'autoloan_applications' THEN (
-            SELECT CONCAT(al.first_name, ' ', al.last_name) 
-            FROM autoloan_applications al WHERE al.id = ia.id  
-          )
-          WHEN ia.loan_type = 'smeasaan_applications' THEN (
-            SELECT sa.applicant_name FROM smeasaan_applications sa WHERE sa.id = ia.id
-          )
-          WHEN ia.loan_type = 'ameendrive_applications' THEN (
-            SELECT ad.applicant_full_name FROM ameendrive_applications ad WHERE ad.id = ia.id
-          )
-          WHEN ia.loan_type = 'platinum_card_applications' THEN (
-            SELECT CONCAT(pc.first_name, ' ', pc.last_name) FROM platinum_card_applications pc WHERE pc.id = ia.id
-          )
-          WHEN ia.loan_type = 'creditcard_applications' THEN (
-            SELECT cc.full_name FROM creditcard_applications cc WHERE cc.id = ia.id
-          )
-          ELSE 'Unknown Applicant'
-        END as applicant_name,
-        -- Get application status
-        CASE 
-          WHEN ia.loan_type = 'cashplus_applications' THEN (SELECT ca.status FROM cashplus_applications ca WHERE ca.id = ia.id)
-          WHEN ia.loan_type = 'autoloan_applications' THEN (SELECT al.status FROM autoloan_applications al WHERE al.id = ia.id)
-          WHEN ia.loan_type = 'smeasaan_applications' THEN (SELECT sa.status FROM smeasaan_applications sa WHERE sa.id = ia.id)
-          WHEN ia.loan_type = 'ameendrive_applications' THEN (SELECT ad.status FROM ameendrive_applications ad WHERE ad.id = ia.id)
-          WHEN ia.loan_type = 'platinum_card_applications' THEN (SELECT pc.status FROM platinum_card_applications pc WHERE pc.id = ia.id)
-          WHEN ia.loan_type = 'creditcard_applications' THEN (SELECT cc.status FROM creditcard_applications cc WHERE cc.id = ia.id)
-          ELSE 'UNKNOWN'
-        END as application_status,
-        -- Get loan amount
-        CASE 
-          WHEN ia.loan_type = 'cashplus_applications' THEN (SELECT ca.amount_requested FROM cashplus_applications ca WHERE ca.id = ia.id)
-          WHEN ia.loan_type = 'autoloan_applications' THEN (SELECT al.price_value FROM autoloan_applications al WHERE al.id = ia.id)
-          WHEN ia.loan_type = 'smeasaan_applications' THEN (SELECT sa.desired_loan_amount FROM smeasaan_applications sa WHERE sa.id = ia.id)
-          WHEN ia.loan_type = 'ameendrive_applications' THEN (SELECT ad.price_value FROM ameendrive_applications ad WHERE ad.id = ia.id)
-          WHEN ia.loan_type = 'platinum_card_applications' THEN 0
-          WHEN ia.loan_type = 'creditcard_applications' THEN 0
-          ELSE 0
-        END as loan_amount
+        aa.assigned_by,
+        aa.status as assignment_status
       FROM agent_assignments aa
-      JOIN ilos_applications ia ON aa.los_id = ia.los_id
-      WHERE aa.agent_id = $1 
-        AND aa.status = 'active'
-        AND aa.assigned_at IS NOT NULL
-      ORDER BY aa.assigned_at DESC;
-    `;
+      WHERE aa.agent_id = $1 AND aa.status = 'active'
+      ORDER BY aa.assigned_at DESC
+    `, [agentId]);
     
-    const result = await db.query(query, [agentId]);
+    console.log(`✅ Found ${assignments.rows.length} active assignments for agent ${agentId}`);
     
-    // Format the response to match frontend expectations
-    const formattedApplications = result.rows.map(app => ({
-      id: `${app.application_type}-${app.id}`,
-      los_id: `LOS-${app.los_id}`,
-      applicant_name: app.applicant_name || 'Unknown Applicant',
-      loan_type: app.application_type,
-      loan_amount: app.loan_amount || 0,
-      status: app.application_status || 'assigned_to_eavmu_officer',
-      priority: 'medium',
-      assigned_officer: agentId,
-      created_at: app.assigned_at || new Date().toISOString(),
-      branch: 'Main Branch',
-      application_type: app.application_type,
-      assignment_notes: app.assignment_notes,
-      documents: [
-        { id: `doc-${app.application_type}-${app.id}-1`, name: "CNIC Copy", status: "pending", required: true },
-        { id: `doc-${app.application_type}-${app.id}-2`, name: "Salary Slip", status: "pending", required: true },
-        { id: `doc-${app.application_type}-${app.id}-3`, name: "Bank Statement", status: "pending", required: true },
-        { id: `doc-${app.application_type}-${app.id}-4`, name: "Employment Letter", status: "pending", required: false },
-      ],
-    }))
+    if (assignments.rows.length === 0) {
+      return res.json([]);
+    }
     
-    console.log(`✅ Found ${result.rows.length} active assignments for agent ${agentId}`);
-    res.json(formattedApplications);
+    // For each assignment, fetch the actual application data from the appropriate table
+    const formattedApplications = await Promise.all(assignments.rows.map(async (assignment) => {
+      const losId = assignment.los_id;
+      
+      // First, get the application type from ilos_applications
+      const ilosResult = await db.query(`
+        SELECT loan_type, status, created_at
+        FROM ilos_applications 
+        WHERE los_id = $1
+      `, [losId]);
+      
+      if (ilosResult.rows.length === 0) {
+        console.log(`⚠️ No ilos_applications record found for LOS ${losId}`);
+        return null;
+      }
+      
+      const ilosApp = ilosResult.rows[0];
+      const loanType = ilosApp.loan_type;
+      
+      // Based on loan_type, fetch from the appropriate application table
+      let applicationData = null;
+      let applicationType = '';
+      
+      if (loanType === 'cashplus_applications') {
+        const result = await db.query(`
+          SELECT 
+            id,
+            'CashPlus' as application_type,
+            COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+            'CashPlus Loan' as loan_type,
+            COALESCE(amount_requested, 0) as loan_amount,
+            COALESCE(status, 'assigned_to_eavmu_officer') as status,
+            'medium' as priority,
+            created_at,
+            'Karachi Main' as branch
+          FROM cashplus_applications 
+          WHERE id = $1
+        `, [losId]);
+        applicationData = result.rows[0];
+        applicationType = 'CashPlus';
+      } else if (loanType === 'autoloan_applications') {
+        const result = await db.query(`
+          SELECT 
+            id,
+            'AutoLoan' as application_type,
+            COALESCE(CONCAT(first_name, ' ', last_name), 'Unknown Applicant') as applicant_name,
+            'Auto Loan' as loan_type,
+            COALESCE(price_value, 0) as loan_amount,
+            COALESCE(status, 'assigned_to_eavmu_officer') as status,
+            'medium' as priority,
+            created_at,
+            'Lahore Main' as branch
+          FROM autoloan_applications 
+          WHERE id = $1
+        `, [losId]);
+        applicationData = result.rows[0];
+        applicationType = 'AutoLoan';
+      } else if (loanType === 'smeasaan') {
+        const result = await db.query(`
+          SELECT 
+            id,
+            'SMEASAAN' as application_type,
+            COALESCE(applicant_name, 'Unknown Applicant') as applicant_name,
+            'SME Loan' as loan_type,
+            COALESCE(desired_loan_amount, 0) as loan_amount,
+            COALESCE(status, 'assigned_to_eavmu_officer') as status,
+            'high' as priority,
+            created_at,
+            'Islamabad' as branch
+          FROM smeasaan_applications 
+          WHERE id = $1
+        `, [losId]);
+        applicationData = result.rows[0];
+        applicationType = 'SMEASAAN';
+      }
+      
+      if (!applicationData) {
+        console.log(`⚠️ No application data found for LOS ${losId} with type ${loanType}`);
+        return null;
+      }
+      
+      // Format the response
+      return {
+        id: `${applicationType}-${applicationData.id}`,
+        los_id: `LOS-${losId}`,
+        applicant_name: applicationData.applicant_name,
+        loan_type: applicationData.loan_type,
+        loan_amount: applicationData.loan_amount,
+        status: 'assigned_to_eavmu_officer',
+        priority: applicationData.priority,
+        assigned_officer: agentId,
+        assigned_by: assignment.assigned_by || 'EAMVU_HEAD',
+        assigned_at: assignment.assigned_at,
+        assignment_notes: assignment.assignment_notes || '',
+        created_at: applicationData.created_at,
+        branch: applicationData.branch,
+        application_type: applicationType,
+        
+        // Documents list
+        documents: [
+          { id: `doc-${applicationType}-${applicationData.id}-1`, name: "CNIC Copy", status: "pending", required: true },
+          { id: `doc-${applicationType}-${applicationData.id}-2`, name: "Salary Slip", status: "pending", required: true },
+          { id: `doc-${applicationType}-${applicationData.id}-3`, name: "Bank Statement", status: "pending", required: true },
+          { id: `doc-${applicationType}-${applicationData.id}-4`, name: "Employment Letter", status: "pending", required: false },
+        ],
+        
+        // Checklist verification status
+        checklist: {
+          kyc_verified: false,
+          aml_verified: false,
+          credit_score_verified: false,
+          document_verification_verified: false,
+          field_verification_verified: false,
+          final_approval_verified: false
+        },
+        
+        // Workflow information
+        workflow: {
+          current_stage: 'EAMVU_OFFICER',
+          previous_stages: ['PB', 'SPU'],
+          next_stages: ['EAMVU_HEAD', 'CIU'],
+          can_approve: true,
+          can_reject: true,
+          can_return: true
+        }
+      };
+    }));
     
+    // Filter out null results
+    const validApplications = formattedApplications.filter(app => app !== null);
+    
+    console.log(`✅ Returning ${validApplications.length} applications for agent ${agentId}`);
+    res.json(validApplications);
   } catch (error) {
     console.error(`❌ Error fetching applications for agent:`, error);
     res.status(500).json({ error: 'Failed to fetch agent applications' });
   }
 });
 
+
 // Simple test endpoint
 router.get('/agents-test', (req, res) => {
   res.json({ message: 'Agents test route works!', timestamp: new Date().toISOString() });
+});
+
+// Test endpoint to check assignments
+router.get('/test/assignments', async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT 
+        aa.los_id,
+        aa.agent_id,
+        aa.assigned_by,
+        aa.assigned_at,
+        aa.status as assignment_status,
+        ea.name as agent_name
+      FROM agent_assignments aa
+      LEFT JOIN eamvu_agents ea ON ea.agent_id = aa.agent_id
+      ORDER BY aa.assigned_at DESC
+    `);
+    
+    res.json({
+      total_assignments: result.rows.length,
+      assignments: result.rows
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Test endpoint to check specific application data
+router.get('/test/application/:losId', async (req, res) => {
+  try {
+    const { losId } = req.params;
+    
+    // Check ilos_applications table
+    const ilosResult = await db.query(`
+      SELECT * FROM ilos_applications WHERE los_id = $1
+    `, [losId]);
+    
+    // Check cashplus_applications table
+    const cashplusResult = await db.query(`
+      SELECT * FROM cashplus_applications WHERE id = $1
+    `, [losId]);
+    
+    // Check autoloan_applications table
+    const autoloanResult = await db.query(`
+      SELECT * FROM autoloan_applications WHERE id = $1
+    `, [losId]);
+    
+    // Check smeasaan_applications table
+    const smeResult = await db.query(`
+      SELECT * FROM smeasaan_applications WHERE id = $1
+    `, [losId]);
+    
+    res.json({
+      los_id: losId,
+      ilos_applications: ilosResult.rows,
+      cashplus_applications: cashplusResult.rows,
+      autoloan_applications: autoloanResult.rows,
+      smeasaan_applications: smeResult.rows
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Test endpoint to debug EAMVU Officer queries
+router.get('/test/eamvu-officer-debug/:agentId', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    // Test the exact query that should work
+    const testQuery = await db.query(`
+      SELECT 
+        ca.id,
+        'CashPlus' as application_type,
+        COALESCE(CONCAT(ca.first_name, ' ', ca.last_name), 'Unknown Applicant') as applicant_name,
+        'CashPlus Loan' as loan_type,
+        COALESCE(ca.amount_requested, 0) as loan_amount,
+        COALESCE(ca.status, 'assigned_to_eavmu_officer') as status,
+        'medium' as priority,
+        ca.created_at,
+        'Karachi Main' as branch,
+        aa.assigned_at,
+        aa.assignment_notes,
+        aa.assigned_by
+      FROM cashplus_applications ca
+      JOIN agent_assignments aa ON aa.los_id = ca.id
+      WHERE aa.agent_id = $1 
+        AND aa.status = 'active'
+        AND ca.created_at IS NOT NULL
+      ORDER BY aa.assigned_at DESC
+    `, [agentId]);
+    
+    res.json({
+      agentId: agentId,
+      query_result: testQuery.rows,
+      row_count: testQuery.rows.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Simple test endpoint for EAMVU Officer
+router.get('/test/eamvu-officer-simple/:agentId', async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    
+    // Simple query to get assignments
+    const assignments = await db.query(`
+      SELECT los_id, agent_id, assigned_at, status
+      FROM agent_assignments 
+      WHERE agent_id = $1 AND status = 'active'
+    `, [agentId]);
+    
+    res.json({
+      agentId: agentId,
+      assignments: assignments.rows,
+      count: assignments.rows.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Get all agents
