@@ -133,7 +133,7 @@ app.use('/api/nadra-verisys',       require('./routes/nadra_verisys'));
 app.use('/api/frms',                require('./routes/frms'));
 app.use('/api/consumer-companies',  require('./routes/consumer_companies_list'));
 app.use('/api/ecib-reports',        require('./routes/ecib_reports'));
-app.use('/api',                     require('./routes/combinechecks'));
+app.use('/api',                     require('./routes/combineChecks'));
 app.use('/api/ccl',        require('./routes/consumer_companies_list'));
 
 // Start the server and bind to localhost for development

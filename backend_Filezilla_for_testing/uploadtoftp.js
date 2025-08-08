@@ -7,7 +7,7 @@ require('dotenv').config();
 const app = express();
 const PORT = 8081;
 
-const LOCAL_ROOT = "C:/Users/Pc/Desktop/Mudassir/ILOS/ILOS-FullStack/ILOS-backend/ilos_loan_application_documents";
+const LOCAL_ROOT = "C:\Users\DELL\Documents\ILOS-FullStack\ILOS-Backend\ilos_loan_application_documents";
 
 // ====== CORS Middleware ======
 app.use((req, res, next) => {
